@@ -26,6 +26,8 @@ Không cần quyền quản trị: mọi thứ nằm trong `%LOCALAPPDATA%\Progr
 
 Trên macOS/Linux thì chạy `./build.sh` rồi chạy thẳng binary trong `dist/`.
 
+Muốn trên Mac có app riêng (icon, bấm từ Launchpad, bỏ vào `/Applications`) thay vì chạy binary trần, dùng `./build-mac-app.sh` — build universal binary (Intel + Apple Silicon), đóng gói thành `DIMA.app`, convert `ui/icon.svg` thành icon, và ký ad-hoc. Thêm cờ `--install` để copy thẳng vào `/Applications`.
+
 ## Chạy trực tiếp
 
 ```bash
