@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="DIMA">
+  <rect width="64" height="64" rx="14" fill="#16212E"/>
+  <!-- Three stacked layers: an image built, then carried to another tag. -->
+  <path d="M32 12 52 22 32 32 12 22z" fill="#4FA8E8"/>
+  <path d="M12 31 32 41 52 31 52 37 32 47 12 37z" fill="#4FA8E8" opacity=".62"/>
+  <path d="M12 42 32 52 52 42 52 46 32 56 12 46z" fill="#46C98B" opacity=".85"/>
+</svg>

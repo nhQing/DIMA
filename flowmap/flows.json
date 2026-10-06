@@ -1,0 +1,1478 @@
+{
+  "app": "DIMA",
+  "tagline": "quản lý image Docker theo dự án",
+  "aliases": {
+    "ui": "ui/index.html"
+  },
+  "lanes": [
+    {
+      "key": "ui",
+      "label": "Giao diện",
+      "sub": "ui/index.html",
+      "color": "#57b6ff"
+    },
+    {
+      "key": "http",
+      "label": "HTTP API",
+      "sub": "api.go",
+      "color": "#f0a94c"
+    },
+    {
+      "key": "store",
+      "label": "Dữ liệu",
+      "sub": "store.go · images.go",
+      "color": "#7ee0a5"
+    },
+    {
+      "key": "runner",
+      "label": "Docker runner",
+      "sub": "builder.go",
+      "color": "#c58cff"
+    },
+    {
+      "key": "sys",
+      "label": "Hệ thống",
+      "sub": "main.go · OS · docker",
+      "color": "#ff7b8a"
+    }
+  ],
+  "screens": [
+    {
+      "key": "rail",
+      "name": "Cột trái",
+      "fn": "renderRail()",
+      "file": "ui:623",
+      "desc": "Luôn hiện ở mọi màn hình: nhóm → dự án → môi trường, kèm các nút tạo và quét.",
+      "nav": [
+        {
+          "btn": "Tổng quan",
+          "sel": "[data-overview]",
+          "file": "ui:649",
+          "note": "về màn hình Tổng quan"
+        },
+        {
+          "btn": "tên nhóm",
+          "sel": "[data-grp]",
+          "file": "ui:650",
+          "note": "gấp/mở nhóm, trạng thái được nhớ lại"
+        },
+        {
+          "btn": "tên dự án",
+          "sel": "[data-proj]",
+          "file": "ui:651",
+          "note": "sang màn hình Dự án"
+        },
+        {
+          "btn": "tên môi trường",
+          "sel": "[data-env]",
+          "file": "ui:652",
+          "note": "sang màn hình Môi trường"
+        }
+      ]
+    },
+    {
+      "key": "overview",
+      "name": "Tổng quan",
+      "fn": "renderOverview()",
+      "file": "ui:681",
+      "desc": "Bản nào đang nằm ở môi trường nào, gom theo dự án, kèm digest rút gọn và mức tụt lại sau bản mới nhất.",
+      "nav": [
+        {
+          "btn": "ô môi trường",
+          "sel": "[data-goenv]",
+          "file": "ui:717",
+          "note": "sang màn hình Môi trường"
+        }
+      ]
+    },
+    {
+      "key": "project",
+      "name": "Màn hình Dự án",
+      "fn": "renderProject()",
+      "file": "ui:744",
+      "desc": "Cài đặt dùng chung, các ô môi trường, và bảng version × môi trường.",
+      "nav": [
+        {
+          "btn": "ô môi trường",
+          "sel": "[data-goenv]",
+          "file": "ui:787",
+          "note": "sang màn hình Môi trường"
+        }
+      ]
+    },
+    {
+      "key": "env",
+      "name": "Màn hình Môi trường",
+      "fn": "renderEnv()",
+      "file": "ui:824",
+      "desc": "Ref hiện tại của môi trường và danh sách các bản đã về đây.",
+      "nav": [
+        {
+          "btn": "thẻ build",
+          "sel": "[data-b]",
+          "file": "ui:873",
+          "note": "mở/đóng thẻ chi tiết"
+        }
+      ]
+    },
+    {
+      "key": "detail",
+      "name": "Thẻ build mở rộng",
+      "fn": "detailHTML()",
+      "file": "ui:924",
+      "within": "env",
+      "desc": "Nằm trong màn hình Môi trường, hiện ra khi bấm một thẻ build: lệnh pull, tag, digest, nhật ký.",
+      "nav": [
+        {
+          "btn": "Chép",
+          "sel": "[data-copy]",
+          "file": "ui:882",
+          "note": "chép lệnh pull / tag / digest"
+        }
+      ]
+    },
+    {
+      "key": "app",
+      "name": "Ngoài giao diện",
+      "fn": "main.go",
+      "file": "main.go:24",
+      "desc": "Việc không do ai bấm nút: khởi động, thoát, nâng cấp dữ liệu, và vòng làm mới mỗi 5 giây.",
+      "nav": []
+    }
+  ],
+  "flows": [
+    {
+      "group": "Vòng đời ứng dụng",
+      "name": "Khởi động ứng dụng",
+      "sub": "từ dòng lệnh tới cửa sổ DIMA mở ra",
+      "triggers": [
+        {
+          "screen": "app",
+          "btn": "Mở DIMA từ Start Menu hoặc dòng lệnh",
+          "file": "main.go:24"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "main()",
+          "file": "main.go:24",
+          "lane": "sys",
+          "desc": "Điểm vào. Đọc các cờ -port, -data, -no-open, -tab."
+        },
+        {
+          "fn": "attachConsole()",
+          "file": "console_windows.go:30",
+          "lane": "sys",
+          "desc": "Trên Windows binary không có console riêng — nối lại output nếu được gọi từ terminal."
+        },
+        {
+          "fn": "bind()",
+          "file": "main.go:121",
+          "lane": "sys",
+          "desc": "Thử mở cổng 7788. Không truyền -port thì cổng bận là nhảy tiếp 7789, 7790…"
+        },
+        {
+          "fn": "alreadyServing()",
+          "file": "main.go:140",
+          "lane": "sys",
+          "desc": "Gọi thử GET /api/state để biết cổng đang do một bản DIMA khác giữ hay một chương trình lạ.",
+          "edge": "cổng bận"
+        },
+        {
+          "fn": "OpenStore()",
+          "file": "store.go:291",
+          "lane": "store",
+          "desc": "Tạo ~/.dima, ~/.dima/versions, ~/.dima/logs rồi nạp cấu hình và lịch sử.",
+          "edge": "cổng trống"
+        },
+        {
+          "fn": "loadConfig()",
+          "file": "store.go:475",
+          "lane": "store",
+          "desc": "Đọc config.json. Chưa có file thì ghi cấu hình mặc định ra đĩa."
+        },
+        {
+          "fn": "decodeConfig()",
+          "file": "store.go:327",
+          "lane": "store",
+          "desc": "Bỏ BOM, dò schemaVersion. Thấy schema v1 thì migrate sang cấu trúc dự án/môi trường."
+        },
+        {
+          "fn": "loadHistory()",
+          "file": "store.go:584",
+          "lane": "store",
+          "desc": "Đọc history.json. Bản build còn kẹt trạng thái \"running\" từ lần thoát trước được chuyển thành canceled."
+        },
+        {
+          "fn": "api.routes()",
+          "file": "api.go:15",
+          "lane": "http",
+          "desc": "Đăng ký toàn bộ endpoint /api/* vào ServeMux."
+        },
+        {
+          "fn": "guard()",
+          "file": "main.go:172",
+          "lane": "http",
+          "desc": "Middleware chặn mọi request có Host không phải loopback — chống DNS rebinding."
+        },
+        {
+          "fn": "show()",
+          "file": "main.go:158",
+          "lane": "sys",
+          "desc": "Mở giao diện: cửa sổ riêng nếu tìm được Chromium, không thì tab trình duyệt thường."
+        },
+        {
+          "fn": "openAppWindow()",
+          "file": "main.go:192",
+          "lane": "sys",
+          "desc": "Chạy Edge/Chrome/Brave ở chế độ --app với profile riêng trong ~/.dima/window."
+        },
+        {
+          "fn": "srv.Serve()",
+          "file": "main.go:99",
+          "lane": "http",
+          "desc": "Phục vụ UI nhúng (embed ui/) và API trên 127.0.0.1."
+        }
+      ],
+      "extra": [
+        {
+          "from": 3,
+          "to": 10,
+          "label": "mở cửa sổ bản đang chạy rồi thoát",
+          "kind": "err"
+        }
+      ]
+    },
+    {
+      "group": "Vòng đời ứng dụng",
+      "name": "Bấm shortcut lần hai",
+      "sub": "chống mở hai bản cùng lúc",
+      "triggers": [
+        {
+          "screen": "app",
+          "btn": "Mở DIMA lần thứ hai khi bản đầu còn chạy",
+          "file": "main.go:59"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "main()",
+          "file": "main.go:24",
+          "lane": "sys",
+          "desc": "Bản DIMA thứ hai khởi động."
+        },
+        {
+          "fn": "bind()",
+          "file": "main.go:121",
+          "lane": "sys",
+          "desc": "Cổng 7788 đã bị chiếm, không mở listener được."
+        },
+        {
+          "fn": "alreadyServing()",
+          "file": "main.go:140",
+          "lane": "sys",
+          "desc": "GET /api/state thấy trả về appVersion → đúng là một bản DIMA, không phải chương trình lạ."
+        },
+        {
+          "fn": "show()",
+          "file": "main.go:158",
+          "lane": "sys",
+          "desc": "Không dựng server thứ hai. Mở URL của bản đang chạy."
+        },
+        {
+          "fn": "openAppWindow()",
+          "file": "main.go:192",
+          "lane": "sys",
+          "desc": "Cùng --user-data-dir nên trình duyệt đưa đúng cửa sổ cũ lên thay vì mở cửa sổ mới."
+        },
+        {
+          "fn": "return",
+          "file": "main.go:65",
+          "lane": "sys",
+          "desc": "Tiến trình thứ hai thoát ngay. Người dùng chỉ thấy một ứng dụng."
+        }
+      ]
+    },
+    {
+      "group": "Vòng đời ứng dụng",
+      "name": "Đóng cửa sổ → thoát",
+      "sub": "trừ khi còn build đang chạy",
+      "triggers": [
+        {
+          "screen": "app",
+          "btn": "Đóng cửa sổ ứng dụng",
+          "file": "main.go:218"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "watchWindow()",
+          "file": "main.go:218",
+          "lane": "sys",
+          "desc": "Goroutine chờ tiến trình trình duyệt của cửa sổ ứng dụng kết thúc."
+        },
+        {
+          "fn": "cmd.Wait()",
+          "file": "main.go:220",
+          "lane": "sys",
+          "desc": "Trả về khi cửa sổ đóng."
+        },
+        {
+          "fn": "< 3 giây?",
+          "file": "main.go:226",
+          "lane": "sys",
+          "desc": "Một số trình duyệt bàn giao cho tiến trình khác rồi thoát ngay — trả về quá nhanh nghĩa là \"đó không phải cửa sổ của ta\", giữ server chạy tiếp."
+        },
+        {
+          "fn": "HasRunningBuild()",
+          "file": "store.go:725",
+          "lane": "store",
+          "desc": "Còn build nào đang chạy không? Còn thì in thông báo và để ứng dụng sống tiếp.",
+          "edge": "đủ lâu"
+        },
+        {
+          "fn": "os.Exit(0)",
+          "file": "main.go:235",
+          "lane": "sys",
+          "desc": "Không còn việc gì — dừng hẳn và trả lại cổng."
+        }
+      ]
+    },
+    {
+      "group": "Cấu hình",
+      "name": "Nạp trạng thái & vẽ giao diện",
+      "sub": "refresh() — vòng đồng bộ trung tâm",
+      "triggers": [
+        {
+          "screen": "app",
+          "btn": "Tự chạy mỗi 5 giây",
+          "sel": "setInterval",
+          "file": "ui:1737"
+        },
+        {
+          "screen": "app",
+          "btn": "Sau mọi thao tác ghi dữ liệu",
+          "file": "ui:552"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "refresh()",
+          "file": "ui:552",
+          "lane": "ui",
+          "desc": "Hàm đồng bộ trung tâm của giao diện. Vòng lặp 5 giây bỏ qua khi đang mở hộp thoại."
+        },
+        {
+          "fn": "api()",
+          "file": "ui:435",
+          "lane": "ui",
+          "desc": "fetch JSON, gặp lỗi thì ném ra message của server."
+        },
+        {
+          "fn": "guard()",
+          "file": "main.go:172",
+          "lane": "http",
+          "desc": "Kiểm Host là loopback rồi mới cho đi tiếp."
+        },
+        {
+          "fn": "api.state()",
+          "file": "api.go:59",
+          "lane": "http",
+          "desc": "Gom mọi thứ giao diện cần vào một response duy nhất."
+        },
+        {
+          "fn": "Store.Config()",
+          "file": "store.go:504",
+          "lane": "store",
+          "desc": "Đọc cấu hình dưới RLock."
+        },
+        {
+          "fn": "Store.Builds()",
+          "file": "store.go:650",
+          "lane": "store",
+          "desc": "Trả bản sao lịch sử build, mới nhất trước."
+        },
+        {
+          "fn": "DockerVersion()",
+          "file": "builder.go:454",
+          "lane": "runner",
+          "desc": "Daemon có sống không. Kết quả được nhớ 10 giây, vì giao diện poll vài giây một lần và giá trị này gần như không đổi."
+        },
+        {
+          "fn": "BuildxOK()",
+          "file": "builder.go:287",
+          "lane": "runner",
+          "desc": "Có docker buildx thì promote đi thẳng trên registry."
+        },
+        {
+          "fn": "writeJSON()",
+          "file": "api.go:34",
+          "lane": "http",
+          "desc": "Đóng gói config + builds + trạng thái docker."
+        },
+        {
+          "fn": "render()",
+          "file": "ui:576",
+          "lane": "ui",
+          "desc": "Selection trỏ vào dự án/môi trường đã bị xóa thì lùi về Tổng quan."
+        },
+        {
+          "fn": "renderRail()",
+          "file": "ui:623",
+          "lane": "ui",
+          "desc": "Cột trái: nhóm gấp/mở được, dự án và môi trường bên trong."
+        },
+        {
+          "fn": "renderPane()",
+          "file": "ui:656",
+          "lane": "ui",
+          "desc": "Khung phải: Tổng quan, màn hình Dự án, hoặc màn hình Môi trường."
+        }
+      ]
+    },
+    {
+      "group": "Cấu hình",
+      "name": "Lưu cài đặt dự án / môi trường",
+      "sub": "mỗi lần lưu là một bản sao lưu",
+      "triggers": [
+        {
+          "screen": "project",
+          "btn": "Cài đặt dự án",
+          "sel": "#doSettings",
+          "file": "ui:785"
+        },
+        {
+          "screen": "env",
+          "btn": "Cài đặt môi trường",
+          "sel": "#doEnvSettings",
+          "file": "ui:849"
+        },
+        {
+          "screen": "env",
+          "btn": "Cài đặt dự án",
+          "sel": "#doProjSettings",
+          "file": "ui:850"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "projectDialog()",
+          "file": "ui:1249",
+          "lane": "ui",
+          "desc": "Form dự án: registry, image, Dockerfile, platform, target, cờ thêm, build args, labels, chế độ phát hành."
+        },
+        {
+          "fn": "envDialog()",
+          "file": "ui:1349",
+          "lane": "ui",
+          "desc": "Form môi trường: chỉ khai phần khác dự án, ô trống hiện sẵn \"kế thừa: …\"."
+        },
+        {
+          "fn": "cloneConfig()",
+          "file": "ui:573",
+          "lane": "ui",
+          "desc": "Deep-copy cấu hình hiện tại để sửa mà không đụng state đang hiển thị."
+        },
+        {
+          "fn": "saveConfig()",
+          "file": "ui:566",
+          "lane": "ui",
+          "desc": "PUT toàn bộ config lên server."
+        },
+        {
+          "fn": "api.saveConfig()",
+          "file": "api.go:71",
+          "lane": "http",
+          "desc": "Bắt buộc: dự án có tên, môi trường có tên, image hiệu lực khác rỗng, tiền tố tag không chứa khoảng trắng hay : / \\."
+        },
+        {
+          "fn": "Project.Effective()",
+          "file": "store.go:124",
+          "lane": "store",
+          "desc": "Dùng để kiểm tra image hiệu lực — khai ở dự án hay ở môi trường đều được."
+        },
+        {
+          "fn": "Store.SaveConfig()",
+          "file": "store.go:523",
+          "lane": "store",
+          "desc": "Ghi dưới Lock."
+        },
+        {
+          "fn": "snapshotConfigLocked()",
+          "file": "store.go:512",
+          "lane": "store",
+          "desc": "Chép config.json hiện tại sang ~/.dima/versions/config-<thời gian>.json trước khi đè."
+        },
+        {
+          "fn": "normalise()",
+          "file": "store.go:423",
+          "lane": "store",
+          "desc": "Cấp id cho dự án/môi trường mới, dọn khoảng trắng, chốt các giá trị mặc định."
+        },
+        {
+          "fn": "writeConfigFile()",
+          "file": "store.go:496",
+          "lane": "store",
+          "desc": "MarshalIndent rồi ghi đè config.json."
+        },
+        {
+          "fn": "refresh()",
+          "file": "ui:552",
+          "lane": "ui",
+          "desc": "Kéo lại state đã normalise để giao diện thấy đúng id vừa được cấp."
+        }
+      ],
+      "extra": [
+        {
+          "from": 4,
+          "to": 10,
+          "label": "400 — báo lỗi, không ghi gì",
+          "kind": "err"
+        }
+      ]
+    },
+    {
+      "group": "Cấu hình",
+      "name": "Chọn thư mục mã nguồn",
+      "sub": "hộp thoại của hệ điều hành + kiểm tra khi gõ",
+      "triggers": [
+        {
+          "screen": "project",
+          "btn": "Cài đặt dự án › Chọn thư mục",
+          "sel": "#pick-ctx",
+          "file": "ui:1306"
+        },
+        {
+          "screen": "env",
+          "btn": "Cài đặt môi trường › Chọn thư mục",
+          "sel": "#pick-ctx",
+          "file": "ui:1404"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "mountPath()",
+          "file": "ui:1153",
+          "lane": "ui",
+          "desc": "Gắn ô đường dẫn: nút Chọn thư mục, debounce 350ms khi gõ tay, dòng trạng thái ngay dưới."
+        },
+        {
+          "fn": "POST /api/pick-folder",
+          "file": "ui:1200",
+          "lane": "ui",
+          "desc": "Trang web không bao giờ được biết đường dẫn thật, nên phải nhờ tiến trình DIMA mở hộp thoại."
+        },
+        {
+          "fn": "api.pickFolder()",
+          "file": "api.go:119",
+          "lane": "http",
+          "desc": "Gọi hộp thoại chọn thư mục của hệ điều hành."
+        },
+        {
+          "fn": "pickFolder()",
+          "file": "picker_windows.go:19",
+          "lane": "sys",
+          "desc": "Windows: hộp thoại Shell. macOS/Linux: osascript / zenity / kdialog."
+        },
+        {
+          "fn": "inspectFolder()",
+          "file": "api.go:152",
+          "lane": "http",
+          "desc": "Thư mục có tồn tại không, có đúng Dockerfile đang khai không, đang có sẵn những Dockerfile nào."
+        },
+        {
+          "fn": "render(info)",
+          "file": "ui:1156",
+          "lane": "ui",
+          "desc": "Hiện xanh \"đã thấy Dockerfile\", hoặc đỏ kèm danh sách Dockerfile đang có trong thư mục."
+        }
+      ],
+      "extra": [
+        {
+          "from": 0,
+          "to": 4,
+          "label": "gõ tay → GET /api/inspect-folder",
+          "kind": "loop"
+        }
+      ]
+    },
+    {
+      "group": "Cấu hình",
+      "name": "Quét thư mục thêm hàng loạt",
+      "sub": "tìm Dockerfile trong các thư mục con",
+      "triggers": [
+        {
+          "screen": "rail",
+          "btn": "Quét thư mục…",
+          "sel": "#scanFolders",
+          "file": "ui:1714"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "importDialog()",
+          "file": "ui:1481",
+          "lane": "ui",
+          "desc": "Chọn một thư mục cha, một nhóm và một registry áp cho tất cả."
+        },
+        {
+          "fn": "scan()",
+          "file": "ui:1541",
+          "lane": "ui",
+          "desc": "Chạy khi chọn xong thư mục, hoặc 500ms sau lần gõ cuối."
+        },
+        {
+          "fn": "api.scanFolder()",
+          "file": "api.go:206",
+          "lane": "http",
+          "desc": "Đi sâu tối đa ba tầng từ thư mục cha. Thư mục cha tự nó cũng có thể là một dự án."
+        },
+        {
+          "fn": "skipDir()",
+          "file": "api.go:255",
+          "lane": "http",
+          "desc": "Bỏ qua node_modules, vendor, dist, build, target, bin, obj, .git và mọi thư mục ẩn."
+        },
+        {
+          "fn": "dockerfileIn()",
+          "file": "api.go:265",
+          "lane": "http",
+          "desc": "Thấy Dockerfile là ghi nhận một dự án và dừng, không chui tiếp vào trong nó."
+        },
+        {
+          "fn": "drawHits()",
+          "file": "ui:1517",
+          "lane": "ui",
+          "desc": "Danh sách tích chọn. Thư mục đã có dự án trỏ tới hiện \"đã có\" và không tích được → quét lại nhiều lần cũng không tạo trùng."
+        },
+        {
+          "fn": "cloneConfig()",
+          "file": "ui:573",
+          "lane": "ui",
+          "desc": "Mỗi mục được chọn thành một dự án rebuild, kèm sẵn hai môi trường Staging và Production."
+        },
+        {
+          "fn": "saveConfig()",
+          "file": "ui:566",
+          "lane": "ui",
+          "desc": "PUT /api/config một lần cho cả lô."
+        },
+        {
+          "fn": "Store.SaveConfig()",
+          "file": "store.go:523",
+          "lane": "store",
+          "desc": "Sao lưu bản cũ, normalise cấp id, ghi file."
+        },
+        {
+          "fn": "refresh()",
+          "file": "ui:552",
+          "lane": "ui",
+          "desc": "Về Tổng quan, thấy ngay các dự án vừa thêm."
+        }
+      ]
+    },
+    {
+      "group": "Cấu hình",
+      "name": "Quét image có sẵn trên máy",
+      "sub": "đưa image đang có trong Docker vào DIMA",
+      "triggers": [
+        {
+          "screen": "rail",
+          "btn": "Quét image…",
+          "sel": "#scanImages",
+          "file": "ui:1715"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "imagesDialog()",
+          "file": "ui:1604",
+          "lane": "ui",
+          "desc": "Mỗi repository thành một dự án; các tag của nó thành phiên bản hiện luôn trong bảng version."
+        },
+        {
+          "fn": "Store.LocalImages()",
+          "file": "builder.go:421",
+          "lane": "runner",
+          "desc": "Hỏi docker bằng template tab thay vì --format json: tên field của JSON từng đổi giữa các bản docker, còn template này ổn định nhiều năm."
+        },
+        {
+          "fn": "docker images",
+          "file": "docker CLI",
+          "lane": "sys",
+          "desc": "{{.Repository}}\\t{{.Tag}}\\t{{.ID}}\\t{{.Size}}\\t{{.CreatedSince}}\\t{{.CreatedAt}} — bỏ qua dòng <none>."
+        },
+        {
+          "fn": "GroupImages()",
+          "file": "images.go:78",
+          "lane": "store",
+          "desc": "Gộp danh sách phẳng thành một mục cho mỗi repository, mới nhất trước."
+        },
+        {
+          "fn": "splitRepository()",
+          "file": "images.go:47",
+          "lane": "store",
+          "desc": "Đoạn đầu chỉ là registry khi trông như một host — có dấu chấm, có cổng, hoặc là localhost. Đúng quy tắc docker dùng, nên moby/buildkit là image trên Docker Hub còn harbor.tech/mm/app thì không."
+        },
+        {
+          "fn": "classifyTag()",
+          "file": "images.go:61",
+          "lane": "store",
+          "desc": "Tách staging-1.2.3 thành tiền tố + version. Tag phải chứa chữ số mới tính là bản phát hành, nên latest, cache, stable bị loại."
+        },
+        {
+          "fn": "api.listImages()",
+          "file": "api.go:287",
+          "lane": "http",
+          "desc": "Đánh dấu repository nào đã có dự án trỏ tới để màn hình làm mờ, không import trùng."
+        },
+        {
+          "fn": "draw()",
+          "file": "ui:1637",
+          "lane": "ui",
+          "desc": "Image của registry riêng được tích sẵn; image kéo từ Docker Hub ẩn đi cho tới khi tích \"Hiện cả image tải về từ Docker Hub\"."
+        },
+        {
+          "fn": "api.importImages()",
+          "file": "api.go:318",
+          "lane": "http",
+          "desc": "Biến các repository đã chọn thành dự án."
+        },
+        {
+          "fn": "ImageRepo.EnvsFor()",
+          "file": "images.go:124",
+          "lane": "store",
+          "desc": "Mỗi tiền tố tag thành một môi trường; không có tiền tố nào thì dự án được một môi trường \"Mặc định\"."
+        },
+        {
+          "fn": "envNameFor()",
+          "file": "images.go:141",
+          "lane": "store",
+          "desc": "prod- → Production, stg- → Staging, dev- → Development, qa- → Test, uat- → UAT."
+        },
+        {
+          "fn": "recordExistingTags()",
+          "file": "api.go:374",
+          "lane": "http",
+          "desc": "Mỗi tag là phiên bản được ghi thành một mục lịch sử kind=import, đề ngày theo lúc image được tạo — nhờ vậy bảng version xếp đúng thứ tự."
+        },
+        {
+          "fn": "Store.SaveConfig()",
+          "file": "store.go:523",
+          "lane": "store",
+          "desc": "Sao lưu bản cũ rồi ghi cấu hình có các dự án mới."
+        },
+        {
+          "fn": "refresh()",
+          "file": "ui:552",
+          "lane": "ui",
+          "desc": "Toast báo đã thêm bao nhiêu dự án, ghi nhận bao nhiêu phiên bản."
+        }
+      ]
+    },
+    {
+      "group": "Cấu hình",
+      "name": "Thêm dự án / thêm môi trường",
+      "sub": "lưu trước để lấy id, rồi mở form",
+      "triggers": [
+        {
+          "screen": "rail",
+          "btn": "+ Tạo mới",
+          "sel": "#addProject",
+          "file": "ui:1717"
+        },
+        {
+          "screen": "rail",
+          "btn": "+ cạnh dự án",
+          "sel": "[data-addenv]",
+          "file": "ui:653"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "#addProject.onclick",
+          "file": "ui:1717",
+          "lane": "ui",
+          "desc": "Đẩy một dự án mẫu (image my-api, một môi trường Staging) vào bản sao cấu hình."
+        },
+        {
+          "fn": "addEnv()",
+          "file": "ui:1698",
+          "lane": "ui",
+          "desc": "Hoặc: thêm một môi trường trống vào dự án đang chọn."
+        },
+        {
+          "fn": "saveConfig()",
+          "file": "ui:566",
+          "lane": "ui",
+          "desc": "Lưu ngay, vì id do server cấp chứ không do giao diện tự đặt."
+        },
+        {
+          "fn": "normalise()",
+          "file": "store.go:423",
+          "lane": "store",
+          "desc": "Mọi id rỗng được cấp một id mới, ổn định."
+        },
+        {
+          "fn": "projectDialog()",
+          "file": "ui:1249",
+          "lane": "ui",
+          "desc": "Mở form của bản ghi vừa được tạo để điền tiếp."
+        }
+      ]
+    },
+    {
+      "group": "Cấu hình",
+      "name": "Bản lưu & khôi phục cấu hình",
+      "sub": "quay lại bất kỳ lần lưu nào",
+      "triggers": [
+        {
+          "screen": "overview",
+          "btn": "Lịch sử cài đặt",
+          "sel": "#doVersions",
+          "file": "ui:716"
+        },
+        {
+          "screen": "project",
+          "btn": "Lịch sử cài đặt",
+          "sel": "#doVersions",
+          "file": "ui:786"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "versionsDialog()",
+          "file": "ui:1444",
+          "lane": "ui",
+          "desc": "Liệt kê các bản config cũ theo thời gian, kèm nút Xem và Khôi phục."
+        },
+        {
+          "fn": "api.listVersions()",
+          "file": "api.go:448",
+          "lane": "http",
+          "desc": "GET /api/config/versions"
+        },
+        {
+          "fn": "Store.Snapshots()",
+          "file": "store.go:541",
+          "lane": "store",
+          "desc": "Chỉ nhận file config-*.json trong ~/.dima/versions; file sao lưu history bị loại ra."
+        },
+        {
+          "fn": "api.readVersion()",
+          "file": "api.go:452",
+          "lane": "http",
+          "desc": "Nút \"Xem\": trả nguyên văn JSON của bản lưu."
+        },
+        {
+          "fn": "api.restoreVersion()",
+          "file": "api.go:462",
+          "lane": "http",
+          "desc": "Nút \"Khôi phục\", sau khi người dùng xác nhận."
+        },
+        {
+          "fn": "RestoreSnapshot()",
+          "file": "store.go:567",
+          "lane": "store",
+          "desc": "Tên file phải là base name thuần — chặn đường dẫn leo ra ngoài thư mục versions."
+        },
+        {
+          "fn": "decodeConfig()",
+          "file": "store.go:327",
+          "lane": "store",
+          "desc": "Bản lưu hỏng thì báo lỗi, không đụng tới cấu hình đang chạy."
+        },
+        {
+          "fn": "Store.SaveConfig()",
+          "file": "store.go:523",
+          "lane": "store",
+          "desc": "Cấu hình hiện tại được sao lưu trước khi bị thay — khôi phục cũng hoàn tác được."
+        },
+        {
+          "fn": "refresh()",
+          "file": "ui:552",
+          "lane": "ui",
+          "desc": "Giao diện vẽ lại theo cấu hình vừa khôi phục."
+        }
+      ]
+    },
+    {
+      "group": "Cấu hình",
+      "name": "Nâng cấp dữ liệu 0.1.x → 0.2.0",
+      "sub": "chạy một lần, lúc mở app lần đầu",
+      "triggers": [
+        {
+          "screen": "app",
+          "btn": "Mở lần đầu sau khi nâng cấp",
+          "file": "store.go:475"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "loadConfig()",
+          "file": "store.go:475",
+          "lane": "store",
+          "desc": "Đọc config.json có sẵn của bản cũ."
+        },
+        {
+          "fn": "decodeConfig()",
+          "file": "store.go:327",
+          "lane": "store",
+          "desc": "Dò schema: không có mảng projects mà có environments → đây là schema v1."
+        },
+        {
+          "fn": "migrateV1()",
+          "file": "store.go:357",
+          "lane": "store",
+          "desc": "Gom toàn bộ môi trường cũ vào một dự án tên \"Dự án của tôi\", chế độ rebuild — đúng hành vi cũ."
+        },
+        {
+          "fn": "liftCommon()",
+          "file": "store.go:383",
+          "lane": "store",
+          "desc": "Cài đặt nào mọi môi trường đều giống nhau thì nâng lên cấp dự án và xóa ở môi trường. Giá trị hiệu lực không đổi."
+        },
+        {
+          "fn": "normalise()",
+          "file": "store.go:423",
+          "lane": "store",
+          "desc": "Cấp id, dọn dữ liệu."
+        },
+        {
+          "fn": "snapshotConfigLocked()",
+          "file": "store.go:512",
+          "lane": "store",
+          "desc": "Bản cũ được cất vào versions/ TRƯỚC khi ghi đè — khôi phục lại được bất cứ lúc nào."
+        },
+        {
+          "fn": "writeConfigFile()",
+          "file": "store.go:496",
+          "lane": "store",
+          "desc": "Ghi cấu trúc mới ra đĩa."
+        },
+        {
+          "fn": "migrateHistory()",
+          "file": "store.go:612",
+          "lane": "store",
+          "desc": "Lịch sử build cũ được gắn version (lấy chính tag cũ) và gắn vào dự án."
+        }
+      ]
+    },
+    {
+      "group": "Build & phát hành",
+      "name": "Build một version",
+      "sub": "từ hộp thoại tới docker build",
+      "triggers": [
+        {
+          "screen": "project",
+          "btn": "Build",
+          "sel": "#doBuild",
+          "file": "ui:779"
+        },
+        {
+          "screen": "project",
+          "btn": "Build — ô trống trong bảng version",
+          "sel": "[data-buildver]",
+          "file": "ui:817"
+        },
+        {
+          "screen": "env",
+          "btn": "Build",
+          "sel": "#doBuild",
+          "file": "ui:847"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "buildDialog()",
+          "file": "ui:1026",
+          "lane": "ui",
+          "desc": "Hỏi version. Gợi ý bản patch/minor kế tiếp dựa trên version mới nhất của dự án, kèm một gợi ý theo dấu thời gian."
+        },
+        {
+          "fn": "refOf()",
+          "file": "ui:501",
+          "lane": "ui",
+          "desc": "Xem trước ref sẽ tạo ra, cập nhật ngay khi gõ."
+        },
+        {
+          "fn": "POST /api/build",
+          "file": "ui:1065",
+          "lane": "ui",
+          "desc": "{ envId, version, push }"
+        },
+        {
+          "fn": "api.startBuild()",
+          "file": "api.go:471",
+          "lane": "http",
+          "desc": "Cổng vào phía server của mọi lệnh build."
+        },
+        {
+          "fn": "Config.FindEnv()",
+          "file": "store.go:199",
+          "lane": "store",
+          "desc": "Tìm cặp dự án + môi trường theo envId."
+        },
+        {
+          "fn": "Project.CanBuild()",
+          "file": "store.go:159",
+          "lane": "store",
+          "desc": "Dự án chạy kiểu promote thì chỉ môi trường nguồn được build — 409 nếu không phải."
+        },
+        {
+          "fn": "checkBuildable()",
+          "file": "api.go:421",
+          "lane": "http",
+          "desc": "Thư mục context có thật không, Dockerfile có nằm trong đó không. Chặn ở đây để khỏi để docker fail ở một thư mục vu vơ."
+        },
+        {
+          "fn": "checkVersion()",
+          "file": "api.go:48",
+          "lane": "http",
+          "desc": "Version không rỗng và không chứa khoảng trắng hay : / \\ — những ký tự docker không nhận trong tag."
+        },
+        {
+          "fn": "Store.Start()",
+          "file": "builder.go:152",
+          "lane": "runner",
+          "desc": "Tạo bản ghi build, chạy nền, trả về ngay cho giao diện."
+        },
+        {
+          "fn": "Project.Effective()",
+          "file": "store.go:124",
+          "lane": "store",
+          "desc": "Ô chữ: môi trường thắng. Build args & labels: trộn theo key. Cờ thêm: nối dự án rồi tới môi trường."
+        },
+        {
+          "fn": "Env.Ref()",
+          "file": "store.go:188",
+          "lane": "store",
+          "desc": "registry/image:tiền-tố+version"
+        },
+        {
+          "fn": "buildArgv()",
+          "file": "builder.go:116",
+          "lane": "runner",
+          "desc": "Dựng dòng lệnh: -t, -f, --build-arg, --label, --platform, --target, cờ thêm, rồi context."
+        },
+        {
+          "fn": "Store.addBuild()",
+          "file": "store.go:670",
+          "lane": "store",
+          "desc": "Ghi vào history.json và nhớ version mới nhất của môi trường."
+        },
+        {
+          "fn": "Store.logFor()",
+          "file": "builder.go:60",
+          "lane": "runner",
+          "desc": "Mở buffer log trong bộ nhớ, đồng thời ghi ra ~/.dima/logs/<build-id>.log."
+        },
+        {
+          "fn": "Store.run()",
+          "file": "builder.go:358",
+          "lane": "runner",
+          "desc": "exec docker build trong thư mục context, stdout+stderr chảy thẳng vào buffer log."
+        },
+        {
+          "fn": "docker build",
+          "file": "docker CLI",
+          "lane": "sys",
+          "desc": "Tiến trình con, hủy được bằng context."
+        },
+        {
+          "fn": "docker push",
+          "file": "builder.go:196",
+          "lane": "sys",
+          "desc": "Chỉ khi có tích \"Push sau khi build\". Build xong mà push lỗi thì trạng thái nói rõ như vậy."
+        },
+        {
+          "fn": "Store.digest()",
+          "file": "builder.go:378",
+          "lane": "runner",
+          "desc": "docker inspect lấy RepoDigests — cái làm nên lệnh pull bất biến và làm được promote sau này."
+        },
+        {
+          "fn": "Store.finish()",
+          "file": "builder.go:397",
+          "lane": "runner",
+          "desc": "Chốt status success/failed/canceled, đóng log, lưu lịch sử."
+        },
+        {
+          "fn": "loadLog()",
+          "file": "ui:970",
+          "lane": "ui",
+          "desc": "Giao diện mở panel log và bắt đầu poll."
+        }
+      ],
+      "extra": [
+        {
+          "from": 5,
+          "to": 19,
+          "label": "409",
+          "kind": "err"
+        },
+        {
+          "from": 6,
+          "to": 19,
+          "label": "400",
+          "kind": "err"
+        }
+      ]
+    },
+    {
+      "group": "Build & phát hành",
+      "name": "Nhật ký trực tiếp",
+      "sub": "poll 800ms theo offset",
+      "triggers": [
+        {
+          "screen": "env",
+          "btn": "thẻ build — mở ra",
+          "sel": "[data-b]",
+          "file": "ui:873"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "loadLog()",
+          "file": "ui:970",
+          "lane": "ui",
+          "desc": "Chỉ chạy khi panel của build đó đang mở."
+        },
+        {
+          "fn": "api.buildLog()",
+          "file": "api.go:569",
+          "lane": "http",
+          "desc": "Xin phần log kể từ vị trí đã nhận, không kéo lại từ đầu."
+        },
+        {
+          "fn": "Store.LogSince()",
+          "file": "builder.go:76",
+          "lane": "runner",
+          "desc": "Build đang chạy thì đọc từ buffer; build đã xong thì đọc từ file log trên đĩa."
+        },
+        {
+          "fn": "logBuffer.since()",
+          "file": "builder.go:41",
+          "lane": "runner",
+          "desc": "Cắt đoạn mới kể từ offset, trả kèm offset kế tiếp."
+        },
+        {
+          "fn": "nối vào <pre>",
+          "file": "ui:983",
+          "lane": "ui",
+          "desc": "Đang ở đáy thì tự cuộn theo; đang đọc ở giữa thì giữ nguyên chỗ đang đọc."
+        },
+        {
+          "fn": "status !== running?",
+          "file": "ui:986",
+          "lane": "ui",
+          "desc": "Còn chạy thì hẹn 800ms gọi lại. Xong rồi thì dừng poll và refresh() nếu trạng thái đã đổi."
+        }
+      ],
+      "extra": [
+        {
+          "from": 5,
+          "to": 0,
+          "label": "còn running → 800ms sau",
+          "kind": "loop"
+        }
+      ]
+    },
+    {
+      "group": "Build & phát hành",
+      "name": "Push bản build chưa push",
+      "sub": "build trước, đẩy sau",
+      "triggers": [
+        {
+          "screen": "detail",
+          "btn": "Push",
+          "sel": "[data-push]",
+          "file": "ui:885"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "nút Push",
+          "file": "ui:885",
+          "lane": "ui",
+          "desc": "Chỉ hiện trên bản build thành công mà chưa lên registry."
+        },
+        {
+          "fn": "api.pushBuild()",
+          "file": "api.go:583",
+          "lane": "http",
+          "desc": "POST /api/build/{id}/push"
+        },
+        {
+          "fn": "Store.Build()",
+          "file": "store.go:659",
+          "lane": "store",
+          "desc": "Lấy bản ghi build theo id."
+        },
+        {
+          "fn": "Config.FindEnv()",
+          "file": "store.go:199",
+          "lane": "store",
+          "desc": "Tìm lại thư mục context để chạy lệnh đúng chỗ."
+        },
+        {
+          "fn": "PushExisting()",
+          "file": "builder.go:220",
+          "lane": "runner",
+          "desc": "Nối tiếp vào đúng file log cũ của bản build đó."
+        },
+        {
+          "fn": "docker push",
+          "file": "docker CLI",
+          "lane": "sys",
+          "desc": "Đẩy ref đã dựng lúc build lên registry."
+        },
+        {
+          "fn": "Store.digest()",
+          "file": "builder.go:378",
+          "lane": "runner",
+          "desc": "Giờ mới có digest — từ đây bản này mới promote được."
+        },
+        {
+          "fn": "Store.updateBuild()",
+          "file": "store.go:677",
+          "lane": "store",
+          "desc": "Đánh dấu pushed, cập nhật digest, lưu history."
+        },
+        {
+          "fn": "refresh()",
+          "file": "ui:552",
+          "lane": "ui",
+          "desc": "Thẻ build đổi sang trạng thái đã push."
+        }
+      ]
+    },
+    {
+      "group": "Build & phát hành",
+      "name": "Promote / Rollback",
+      "sub": "gắn thêm tag, giữ nguyên digest",
+      "triggers": [
+        {
+          "screen": "project",
+          "btn": "Promote — ô trống trong bảng version",
+          "sel": "[data-promote]",
+          "file": "ui:812"
+        },
+        {
+          "screen": "detail",
+          "btn": "Đưa lên <môi trường>",
+          "sel": "[data-sendto]",
+          "file": "ui:910"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "promoteDialog()",
+          "file": "ui:1081",
+          "lane": "ui",
+          "desc": "Chọn môi trường đích và version. Cảnh báo nếu máy không có buildx."
+        },
+        {
+          "fn": "cảnh báo trùng version",
+          "file": "ui:1115",
+          "lane": "ui",
+          "desc": "Môi trường đích từng nhận đúng version này với một image khác → nói rõ tag sẽ bị trỏ sang image mới."
+        },
+        {
+          "fn": "api.promoteBuild()",
+          "file": "api.go:511",
+          "lane": "http",
+          "desc": "POST /api/build/{id}/promote"
+        },
+        {
+          "fn": "status === success?",
+          "file": "api.go:527",
+          "lane": "http",
+          "desc": "Chỉ promote được bản build thành công."
+        },
+        {
+          "fn": "pushed && digest?",
+          "file": "api.go:531",
+          "lane": "http",
+          "desc": "Chưa lên registry thì chưa có digest để trỏ tag mới vào — phải push trước."
+        },
+        {
+          "fn": "cùng dự án, khác env",
+          "file": "api.go:540",
+          "lane": "http",
+          "desc": "Hai môi trường của một dự án dùng chung repository."
+        },
+        {
+          "fn": "tag đích ≠ tag nguồn",
+          "file": "api.go:560",
+          "lane": "http",
+          "desc": "Thiếu tiền tố tag khác nhau thì promote sẽ trỏ tag nguồn vào chính nó và chẳng thay đổi gì — 409 kèm hướng dẫn sửa."
+        },
+        {
+          "fn": "Store.Promote()",
+          "file": "builder.go:294",
+          "lane": "runner",
+          "desc": "Không build lại. Digest kết quả bằng đúng digest nguồn — chính chỗ đó làm rollback chỉ là promote một version cũ."
+        },
+        {
+          "fn": "repoOf()",
+          "file": "builder.go:244",
+          "lane": "runner",
+          "desc": "Cắt tag khỏi ref để ghép thành repo@digest. Dấu hai chấm của cổng registry không bị nhầm là tag."
+        },
+        {
+          "fn": "buildxAvailable()",
+          "file": "builder.go:275",
+          "lane": "runner",
+          "desc": "Kiểm một lần cho cả phiên chạy — câu trả lời không đổi khi app còn mở."
+        },
+        {
+          "fn": "promoteSteps()",
+          "file": "builder.go:262",
+          "lane": "runner",
+          "desc": "Có buildx: imagetools create, làm thẳng trên registry. Không có: pull → tag → push."
+        },
+        {
+          "fn": "Store.run()",
+          "file": "builder.go:358",
+          "lane": "runner",
+          "desc": "Chạy từng bước, lỗi bước nào dừng ngay ở bước đó."
+        },
+        {
+          "fn": "docker buildx imagetools",
+          "file": "docker CLI",
+          "lane": "sys",
+          "desc": "Không truyền dữ liệu qua máy, giữ nguyên manifest đa kiến trúc."
+        },
+        {
+          "fn": "Store.finish()",
+          "file": "builder.go:397",
+          "lane": "runner",
+          "desc": "Ghi \"Xong. Digest giữ nguyên: …\" vào log rồi chốt trạng thái."
+        }
+      ],
+      "extra": [
+        {
+          "from": 3,
+          "to": 13,
+          "label": "409",
+          "kind": "err"
+        },
+        {
+          "from": 6,
+          "to": 13,
+          "label": "409",
+          "kind": "err"
+        }
+      ]
+    },
+    {
+      "group": "Build & phát hành",
+      "name": "Dừng build giữa chừng",
+      "sub": "hủy tiến trình docker đang chạy",
+      "triggers": [
+        {
+          "screen": "detail",
+          "btn": "Dừng build",
+          "sel": "[data-cancel]",
+          "file": "ui:893"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "nút Dừng build",
+          "file": "ui:893",
+          "lane": "ui",
+          "desc": "Chỉ hiện khi build đang chạy."
+        },
+        {
+          "fn": "api.cancelBuild()",
+          "file": "api.go:601",
+          "lane": "http",
+          "desc": "POST /api/build/{id}/cancel — 409 nếu build đã kết thúc."
+        },
+        {
+          "fn": "Store.Cancel()",
+          "file": "builder.go:99",
+          "lane": "runner",
+          "desc": "Tra hàm hủy đã đăng ký theo build id."
+        },
+        {
+          "fn": "context cancel",
+          "file": "builder.go:152",
+          "lane": "runner",
+          "desc": "Hủy context mà lệnh docker đang gắn vào."
+        },
+        {
+          "fn": "exec kill",
+          "file": "docker CLI",
+          "lane": "sys",
+          "desc": "CommandContext kết liễu tiến trình con."
+        },
+        {
+          "fn": "Store.run()",
+          "file": "builder.go:358",
+          "lane": "runner",
+          "desc": "Trả về lỗi; ctx.Err() khác nil nên đây là hủy chứ không phải build hỏng."
+        },
+        {
+          "fn": "Store.finish()",
+          "file": "builder.go:397",
+          "lane": "runner",
+          "desc": "Chốt trạng thái canceled."
+        },
+        {
+          "fn": "loadLog()",
+          "file": "ui:970",
+          "lane": "ui",
+          "desc": "Lần poll kế tiếp thấy status đã đổi → dừng poll và refresh()."
+        }
+      ]
+    },
+    {
+      "group": "Build & phát hành",
+      "name": "Xóa một bản build khỏi lịch sử",
+      "sub": "xóa cả file log",
+      "triggers": [
+        {
+          "screen": "detail",
+          "btn": "Xóa khỏi lịch sử",
+          "sel": "[data-del]",
+          "file": "ui:900"
+        }
+      ],
+      "steps": [
+        {
+          "fn": "nút Xóa khỏi lịch sử",
+          "file": "ui:900",
+          "lane": "ui",
+          "desc": "Hỏi xác nhận trước. Image trên registry không bị đụng tới."
+        },
+        {
+          "fn": "api.deleteBuild()",
+          "file": "api.go:609",
+          "lane": "http",
+          "desc": "DELETE /api/build/{id} → 204."
+        },
+        {
+          "fn": "Store.DeleteBuild()",
+          "file": "store.go:689",
+          "lane": "store",
+          "desc": "Bỏ bản ghi khỏi danh sách, xóa luôn file ~/.dima/logs/<id>.log."
+        },
+        {
+          "fn": "persistHistoryLocked()",
+          "file": "store.go:641",
+          "lane": "store",
+          "desc": "Ghi lại history.json."
+        },
+        {
+          "fn": "refresh()",
+          "file": "ui:552",
+          "lane": "ui",
+          "desc": "Bảng lịch sử vẽ lại."
+        }
+      ]
+    }
+  ]
+}

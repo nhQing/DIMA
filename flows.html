@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<!--
+  Bản đồ luồng end-to-end — khung dùng chung.
+  Dữ liệu của từng dự án được flowmap-build.mjs nhét vào khối DATA bên dưới;
+  đừng sửa file này để mô tả một dự án cụ thể.
+-->
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DIMA — Bản đồ luồng end-to-end</title>
+<style>
+:root{
+  --bg:#0c0f14; --bg2:#11151c; --panel:#141922; --line:#232a36; --line2:#2e3746;
+  --fg:#e6ebf2; --dim:#8b97a8; --dim2:#5f6b7c; --accent:#57b6ff;
+  --nw:214px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font:13px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.mono,code,pre{font-family:Consolas,"JetBrains Mono","SF Mono",monospace}
+
+header{
+  flex:0 0 auto; display:flex; align-items:center; gap:14px;
+  padding:10px 16px; background:var(--bg2); border-bottom:1px solid var(--line);
+}
+.brand{display:flex;align-items:baseline;gap:9px}
+.brand b{font-size:15px;letter-spacing:.3px}
+.brand span{color:var(--dim);font-size:12px}
+.legend{display:flex;gap:12px;margin-left:auto;flex-wrap:wrap}
+.legend i{display:inline-flex;align-items:center;gap:6px;font-style:normal;color:var(--dim);font-size:11.5px}
+.legend i::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--c)}
+
+main{flex:1 1 auto;display:flex;min-height:0}
+aside{
+  position:relative;
+  flex:0 0 auto; width:var(--asideW,300px); min-width:180px;
+  background:var(--bg2); border-right:1px solid var(--line);
+  display:flex; flex-direction:column; min-height:0;
+}
+body.no-aside aside{display:none}
+
+/* Dải kéo để đổi bề rộng, nằm đè lên mép panel. */
+.gutter{
+  position:absolute;top:0;bottom:0;width:7px;cursor:col-resize;z-index:30;
+}
+.gutter::after{
+  content:"";position:absolute;top:0;bottom:0;left:3px;width:1px;background:transparent;transition:background .15s;
+}
+.gutter:hover::after,.gutter.on::after{background:var(--accent)}
+aside .gutter{right:-3px}
+.insp .gutter{left:-3px}
+
+button.icon{
+  flex:0 0 auto;border:1px solid var(--line2);background:var(--panel);color:var(--dim);
+  border-radius:7px;padding:5px 9px;cursor:pointer;font:inherit;line-height:1;
+}
+button.icon:hover{border-color:#41506a;color:var(--fg)}
+.modes{display:flex;gap:4px;padding:10px 10px 0}
+.modes button{
+  flex:1 1 0;padding:6px 8px;border-radius:7px;cursor:pointer;font:inherit;font-size:12px;
+  border:1px solid var(--line2);background:var(--panel);color:var(--dim);
+}
+.modes button.on{background:#18222f;border-color:#2b4a68;color:var(--fg)}
+.search{padding:8px 10px 6px}
+.search input{
+  width:100%; padding:7px 10px; border-radius:8px; border:1px solid var(--line2);
+  background:var(--panel); color:var(--fg); outline:none; font:inherit;
+}
+.search input:focus{border-color:var(--accent)}
+.list{overflow:auto;padding:0 8px 18px;flex:1 1 auto}
+.grp{padding:14px 8px 6px;font-size:10.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--dim2)}
+.flow{
+  display:block;width:100%;text-align:left;cursor:pointer;
+  padding:8px 10px;margin-bottom:3px;border-radius:8px;
+  border:1px solid transparent;background:none;color:var(--fg);font:inherit;
+}
+.flow:hover{background:#1a212c}
+.flow.on{background:#18222f;border-color:#2b4a68}
+.flow .t{display:flex;align-items:center;gap:8px}
+.flow .n{
+  flex:0 0 auto;width:20px;height:20px;border-radius:6px;background:var(--line);
+  color:var(--dim);display:grid;place-items:center;font-size:10.5px
+}
+.flow.on .n{background:var(--accent);color:#06121d;font-weight:700}
+.flow .s{color:var(--dim);font-size:11.5px;margin-top:3px;margin-left:28px}
+
+.scr{margin:10px 0 2px;padding:8px 10px;border-radius:8px;background:#151b24;border:1px solid var(--line)}
+.scr .sn{display:flex;align-items:baseline;gap:8px}
+.scr .sn b{font-size:12.5px}
+.scr .sn code{color:var(--dim2);font-size:10.5px;margin-left:auto}
+.scr .sd{color:var(--dim);font-size:11px;margin-top:3px}
+.btnrow{
+  display:flex;align-items:center;gap:8px;width:100%;text-align:left;cursor:pointer;
+  padding:7px 10px 7px 14px;margin:2px 0;border-radius:8px;
+  border:1px solid transparent;background:none;color:var(--fg);font:inherit;
+}
+.btnrow:hover{background:#1a212c}
+.btnrow.on{background:#18222f;border-color:#2b4a68}
+.btnrow .chip{
+  flex:0 0 auto;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  padding:2px 8px;border-radius:6px;background:#1e2733;border:1px solid var(--line2);
+  font-size:11.5px;color:#cfe0f2;
+}
+.btnrow.on .chip{background:var(--accent);border-color:var(--accent);color:#06121d;font-weight:600}
+.btnrow .to{color:var(--dim);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btnrow.nav{cursor:default}
+.btnrow.nav:hover{background:none}
+.btnrow.nav .chip{background:none;border-style:dashed;color:var(--dim2)}
+.btnrow.nav .to{color:var(--dim2);font-style:italic}
+
+section{flex:1 1 auto;display:flex;flex-direction:column;min-width:0;min-height:0}
+.toolbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 14px;border-bottom:1px solid var(--line);background:var(--bg2);
+}
+.crumb{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.crumb .c-screen{color:var(--dim);font-size:12px}
+.crumb .c-btn{
+  padding:1px 8px;border-radius:6px;background:#1e2733;border:1px solid var(--line2);
+  font-size:11.5px;color:#cfe0f2;
+}
+.crumb .c-sep{color:var(--dim2)}
+.crumb .c-flow{font-size:14px;font-weight:600}
+.crumb .c-sub{color:var(--dim);font-size:11.5px}
+.spacer{flex:1 1 auto}
+button.b{
+  border:1px solid var(--line2);background:var(--panel);color:var(--fg);
+  padding:6px 11px;border-radius:7px;cursor:pointer;font:inherit;
+}
+button.b:hover:not(:disabled){border-color:#41506a;background:#1a2130}
+button.b:disabled{opacity:.4;cursor:default}
+button.b.run{background:var(--accent);border-color:var(--accent);color:#06121d;font-weight:600}
+button.b.run:hover:not(:disabled){background:#77c5ff}
+button.b.stop{background:#3a1f26;border-color:#6b3540;color:#ffb3bd}
+.speed{display:flex;align-items:center;gap:7px;color:var(--dim);font-size:11.5px}
+.speed input{width:90px;accent-color:var(--accent)}
+
+.trigbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+  padding:6px 14px;border-bottom:1px solid var(--line);background:#0f131a;
+}
+.trigbar .lbl{color:var(--dim2);font-size:11px}
+.tchip{
+  display:inline-flex;align-items:center;gap:6px;cursor:pointer;font:inherit;font-size:11.5px;
+  padding:3px 9px;border-radius:14px;border:1px solid var(--line2);background:var(--panel);color:var(--dim);
+}
+.tchip:hover{border-color:#41506a;color:var(--fg)}
+.tchip.on{background:#18222f;border-color:#3d6c96;color:var(--fg)}
+.tchip s{text-decoration:none;color:var(--dim2)}
+.tchip.on s{color:#8fb9dd}
+
+.wrap{flex:1 1 auto;position:relative;overflow:auto;background:
+  radial-gradient(circle at 1px 1px,#1b2230 1px,transparent 0) 0 0/26px 26px, var(--bg)}
+.sizer{position:relative}
+.stage{position:absolute;left:0;top:0;transform-origin:0 0}
+svg.edges{position:absolute;inset:0;overflow:visible;pointer-events:none}
+
+.band{position:absolute;left:0;pointer-events:none}
+.band .fill{position:absolute;inset:0;background:var(--c);opacity:.030}
+.band .rule{position:absolute;left:0;right:0;top:0;height:1px;background:var(--line)}
+.lane-label{
+  position:absolute;top:50%;transform:translateY(-50%);
+  font-size:10.5px;letter-spacing:1.1px;text-transform:uppercase;
+  color:var(--c);opacity:.85;white-space:nowrap;pointer-events:none;
+}
+.lane-label small{display:block;color:var(--dim2);letter-spacing:.2px;text-transform:none;font-size:10.5px;margin-top:2px}
+
+.node{
+  position:absolute;width:var(--nw);padding:9px 11px 10px;border-radius:10px;cursor:pointer;
+  background:var(--panel);border:1px solid var(--line2);
+  transition:border-color .22s, box-shadow .22s, transform .22s, background .22s;
+}
+.node::before{
+  content:"";position:absolute;left:-1px;top:10px;bottom:10px;width:2px;border-radius:2px;
+  background:var(--c);opacity:.55;
+}
+.node:hover{border-color:#41506a}
+.node .n-top{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.node .n-i{
+  width:17px;height:17px;border-radius:5px;background:#1d2530;color:var(--dim);
+  display:grid;place-items:center;font-size:10px;flex:0 0 auto
+}
+.node .n-file{color:var(--dim2);font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.node .n-fn{font-family:Consolas,monospace;font-size:12.5px;color:var(--c);word-break:break-word}
+.node .n-desc{color:var(--dim);font-size:11.5px;margin-top:5px}
+.node.done{border-color:#33506b;background:#161d27}
+.node.done .n-i{background:var(--c);color:#06121d;font-weight:700}
+.node.active{
+  border-color:var(--c);background:#1a2331;transform:scale(1.035);
+  box-shadow:0 0 0 1px var(--c),0 0 26px -4px var(--c),0 10px 30px -12px #000;
+  z-index:3;
+}
+.node.active .n-i{background:var(--c);color:#06121d;font-weight:700}
+.node.active .n-desc{color:#c3ccd8}
+.node.picked{outline:2px dashed var(--c);outline-offset:3px}
+
+.e-base{fill:none;stroke:var(--line2);stroke-width:1.6}
+.e-lit{fill:none;stroke:var(--c);stroke-width:2.2;stroke-linecap:round;opacity:0}
+.e-lit.on{opacity:1}
+.e-flow{fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round;stroke-dasharray:7 13;opacity:0}
+.e-flow.on{opacity:.9;animation:march .55s linear infinite}
+@keyframes march{to{stroke-dashoffset:-20}}
+.e-base.err{stroke-dasharray:5 6;stroke:#6b414b}
+.e-base.loop{stroke-dasharray:5 6;stroke:#3f5f55}
+.e-alt{fill:none;stroke-width:2;stroke-linecap:round;stroke-dasharray:6 8;opacity:0}
+.e-alt.on{opacity:.9;animation:march .75s linear infinite}
+.e-label{font-size:10.5px;fill:var(--dim2);font-family:Consolas,monospace}
+.e-label.err{fill:#a8626f}
+.e-label.loop{fill:#6fae92}
+
+.insp{
+  position:relative;
+  flex:0 0 auto;width:var(--inspW,340px);min-width:240px;
+  background:var(--bg2);border-left:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0;
+}
+.insp.hide{display:none}
+/* Màn hẹp thì panel nổi lên trên canvas, thay vì bóp canvas còn một dải. */
+@media (max-width:1240px){
+  .insp{position:fixed;top:0;right:0;bottom:0;z-index:20;box-shadow:-18px 0 40px -20px #000}
+}
+.insp-head{display:flex;align-items:flex-start;gap:8px;padding:12px 14px 10px;border-bottom:1px solid var(--line)}
+.insp-head .lane{
+  font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--c);
+  border:1px solid var(--c);border-radius:5px;padding:1px 6px;opacity:.85;flex:0 0 auto;margin-top:2px;
+}
+.insp-head .nm{flex:1 1 auto;min-width:0}
+.insp-head .nm b{font-family:Consolas,monospace;font-size:14px;word-break:break-word}
+.insp-head .nm div{color:var(--dim2);font-size:11px;margin-top:2px}
+.insp-head .x{flex:0 0 auto;border:none;background:none;color:var(--dim2);cursor:pointer;font-size:17px;line-height:1;padding:0 2px}
+.insp-head .x:hover{color:var(--fg)}
+.insp-body{overflow:auto;padding:4px 14px 20px;flex:1 1 auto}
+.sec{margin-top:14px}
+.sec > h4{margin:0 0 6px;font-size:10px;letter-spacing:.9px;text-transform:uppercase;color:var(--dim2);font-weight:600}
+.loc{display:flex;align-items:center;gap:8px}
+.loc code{
+  flex:1 1 auto;background:var(--panel);border:1px solid var(--line2);border-radius:6px;
+  padding:5px 8px;font-size:11.5px;color:#cfe0f2;overflow:hidden;text-overflow:ellipsis;
+  user-select:all;cursor:text;
+}
+.loc button{
+  flex:0 0 auto;border:1px solid var(--line2);background:var(--panel);color:var(--fg);
+  border-radius:6px;padding:5px 9px;cursor:pointer;font:inherit;font-size:11.5px;
+}
+.loc button:hover{border-color:#41506a}
+.desc{color:#c3ccd8;font-size:12.5px}
+.sig{
+  background:var(--panel);border:1px solid var(--line2);border-radius:6px;padding:6px 8px;
+  font-size:11.5px;color:var(--dim);white-space:pre-wrap;word-break:break-word;
+}
+.pos{color:var(--dim);font-size:12px}
+.hop{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}
+.hop button{
+  flex:1 1 130px;min-width:0;text-align:left;border:1px solid var(--line2);background:var(--panel);
+  color:var(--fg);border-radius:7px;padding:6px 9px;cursor:pointer;font:inherit;font-size:11.5px;
+}
+.hop button:hover{border-color:#41506a;background:#1a2130}
+.hop button span{display:block;color:var(--dim2);font-size:10px;margin-bottom:1px}
+.hop button b{font-family:Consolas,monospace;font-weight:400;font-size:11.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.xref button{
+  display:block;width:100%;text-align:left;border:1px solid transparent;background:none;
+  color:var(--fg);border-radius:7px;padding:5px 8px;cursor:pointer;font:inherit;font-size:11.5px;margin-bottom:2px;
+}
+.xref button:hover{background:#1a212c;border-color:var(--line2)}
+.xref button i{font-style:normal;color:var(--dim2);font-size:10.5px;margin-left:6px}
+.code{
+  background:#0e1218;border:1px solid var(--line2);border-radius:8px;padding:9px 10px;
+  font-size:11px;line-height:1.55;color:#b9c6d6;overflow:auto;max-height:340px;margin:0;white-space:pre;
+}
+.nosrc{color:var(--dim2);font-size:11.5px;font-style:italic}
+.stamp{color:var(--dim2);font-size:10.5px;margin-top:6px}
+
+footer{
+  flex:0 0 auto;border-top:1px solid var(--line);background:var(--bg2);
+  padding:8px 14px 10px;display:flex;flex-direction:column;gap:7px;
+}
+.track{display:flex;gap:4px;overflow-x:auto;padding-bottom:2px}
+.pip{
+  flex:0 0 auto;min-width:26px;height:22px;padding:0 7px;border-radius:6px;cursor:pointer;
+  background:#1a2028;border:1px solid var(--line);color:var(--dim2);font-size:10.5px;
+  display:grid;place-items:center;
+}
+.pip:hover{border-color:var(--line2)}
+.pip.done{background:#1d2b39;border-color:#2f4a63;color:#9fc4e4}
+.pip.active{background:var(--accent);border-color:var(--accent);color:#06121d;font-weight:700}
+.now{display:flex;gap:9px;align-items:baseline;min-height:19px}
+.now .k{color:var(--dim2);font-size:11px;flex:0 0 auto}
+.now .fn{font-family:Consolas,monospace;color:var(--fg)}
+.now .d{color:var(--dim);font-size:12px}
+.hint{color:var(--dim2);font-size:11px}
+kbd{background:#1c232e;border:1px solid var(--line2);border-bottom-width:2px;border-radius:4px;padding:0 4px;font-size:10.5px}
+.toast{
+  position:fixed;left:50%;bottom:22px;transform:translateX(-50%);
+  background:#1d2733;border:1px solid #3d6c96;border-radius:8px;padding:7px 14px;font-size:12px;
+  opacity:0;transition:opacity .2s;pointer-events:none;z-index:99;
+}
+.toast.on{opacity:1}
+.fatal{margin:40px auto;max-width:560px;padding:20px;border:1px solid #6b3540;border-radius:10px;background:#1a1216}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><b id="appName"></b><span id="appSub"></span></div>
+  <div class="legend" id="legend"></div>
+</header>
+
+<main>
+  <aside>
+    <div class="modes">
+      <button id="mTheme" class="on">Theo chủ đề</button>
+      <button id="mScreen">Theo màn hình</button>
+    </div>
+    <div class="search"><input id="q" placeholder="Lọc…" autocomplete="off"></div>
+    <div class="list" id="list"></div>
+    <div class="gutter" id="gutterL" title="Kéo để đổi bề rộng"></div>
+  </aside>
+
+  <section>
+    <div class="toolbar">
+      <button class="icon" id="bAside" title="Ẩn/hiện danh sách luồng (B)">☰</button>
+      <div class="crumb" id="crumb"></div>
+      <div class="spacer"></div>
+      <div class="speed">Tốc độ<input type="range" id="speed" min="1" max="10" value="6"></div>
+      <button class="b" id="bPrev" title="Lùi một bước">◀</button>
+      <button class="b run" id="bPlay">▶ Chạy</button>
+      <button class="b" id="bNext" title="Tiến một bước">▶|</button>
+      <button class="b" id="bReset">Đặt lại</button>
+      <button class="b" id="bFit" title="Vừa khung">⤢</button>
+    </div>
+    <div class="trigbar" id="trigbar"></div>
+
+    <div class="wrap" id="wrap"><div class="sizer" id="sizer"><div class="stage" id="stage">
+      <svg class="edges" id="svg"></svg>
+    </div></div></div>
+
+    <footer>
+      <div class="track" id="track"></div>
+      <div class="now" id="now"></div>
+    </footer>
+  </section>
+
+  <div class="insp hide" id="insp">
+    <div class="gutter" id="gutterR" title="Kéo để đổi bề rộng"></div>
+    <div class="insp-head" id="inspHead"></div>
+    <div class="insp-body" id="inspBody"></div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* DATA-BEGIN */
+const DATA = {"app":"DIMA","tagline":"quản lý image Docker theo dự án","aliases":{"ui":"ui/index.html"},"lanes":[{"key":"ui","label":"Giao diện","sub":"ui/index.html","color":"#57b6ff"},{"key":"http","label":"HTTP API","sub":"api.go","color":"#f0a94c"},{"key":"store","label":"Dữ liệu","sub":"store.go · images.go","color":"#7ee0a5"},{"key":"runner","label":"Docker runner","sub":"builder.go","color":"#c58cff"},{"key":"sys","label":"Hệ thống","sub":"main.go · OS · docker","color":"#ff7b8a"}],"screens":[{"key":"rail","name":"Cột trái","fn":"renderRail()","file":"ui:623","desc":"Luôn hiện ở mọi màn hình: nhóm → dự án → môi trường, kèm các nút tạo và quét.","nav":[{"btn":"Tổng quan","sel":"[data-overview]","file":"ui:649","note":"về màn hình Tổng quan"},{"btn":"tên nhóm","sel":"[data-grp]","file":"ui:650","note":"gấp/mở nhóm, trạng thái được nhớ lại"},{"btn":"tên dự án","sel":"[data-proj]","file":"ui:651","note":"sang màn hình Dự án"},{"btn":"tên môi trường","sel":"[data-env]","file":"ui:652","note":"sang màn hình Môi trường"}]},{"key":"overview","name":"Tổng quan","fn":"renderOverview()","file":"ui:681","desc":"Bản nào đang nằm ở môi trường nào, gom theo dự án, kèm digest rút gọn và mức tụt lại sau bản mới nhất.","nav":[{"btn":"ô môi trường","sel":"[data-goenv]","file":"ui:717","note":"sang màn hình Môi trường"}]},{"key":"project","name":"Màn hình Dự án","fn":"renderProject()","file":"ui:744","desc":"Cài đặt dùng chung, các ô môi trường, và bảng version × môi trường.","nav":[{"btn":"ô môi trường","sel":"[data-goenv]","file":"ui:787","note":"sang màn hình Môi trường"}]},{"key":"env","name":"Màn hình Môi trường","fn":"renderEnv()","file":"ui:824","desc":"Ref hiện tại của môi trường và danh sách các bản đã về đây.","nav":[{"btn":"thẻ build","sel":"[data-b]","file":"ui:873","note":"mở/đóng thẻ chi tiết"}]},{"key":"detail","name":"Thẻ build mở rộng","fn":"detailHTML()","file":"ui:924","within":"env","desc":"Nằm trong màn hình Môi trường, hiện ra khi bấm một thẻ build: lệnh pull, tag, digest, nhật ký.","nav":[{"btn":"Chép","sel":"[data-copy]","file":"ui:882","note":"chép lệnh pull / tag / digest"}]},{"key":"app","name":"Ngoài giao diện","fn":"main.go","file":"main.go:24","desc":"Việc không do ai bấm nút: khởi động, thoát, nâng cấp dữ liệu, và vòng làm mới mỗi 5 giây.","nav":[]}],"flows":[{"group":"Vòng đời ứng dụng","name":"Khởi động ứng dụng","sub":"từ dòng lệnh tới cửa sổ DIMA mở ra","triggers":[{"screen":"app","btn":"Mở DIMA từ Start Menu hoặc dòng lệnh","file":"main.go:24"}],"steps":[{"fn":"main()","file":"main.go:24","lane":"sys","desc":"Điểm vào. Đọc các cờ -port, -data, -no-open, -tab."},{"fn":"attachConsole()","file":"console_windows.go:30","lane":"sys","desc":"Trên Windows binary không có console riêng — nối lại output nếu được gọi từ terminal."},{"fn":"bind()","file":"main.go:121","lane":"sys","desc":"Thử mở cổng 7788. Không truyền -port thì cổng bận là nhảy tiếp 7789, 7790…"},{"fn":"alreadyServing()","file":"main.go:140","lane":"sys","desc":"Gọi thử GET /api/state để biết cổng đang do một bản DIMA khác giữ hay một chương trình lạ.","edge":"cổng bận"},{"fn":"OpenStore()","file":"store.go:291","lane":"store","desc":"Tạo ~/.dima, ~/.dima/versions, ~/.dima/logs rồi nạp cấu hình và lịch sử.","edge":"cổng trống"},{"fn":"loadConfig()","file":"store.go:475","lane":"store","desc":"Đọc config.json. Chưa có file thì ghi cấu hình mặc định ra đĩa."},{"fn":"decodeConfig()","file":"store.go:327","lane":"store","desc":"Bỏ BOM, dò schemaVersion. Thấy schema v1 thì migrate sang cấu trúc dự án/môi trường."},{"fn":"loadHistory()","file":"store.go:584","lane":"store","desc":"Đọc history.json. Bản build còn kẹt trạng thái \"running\" từ lần thoát trước được chuyển thành canceled."},{"fn":"api.routes()","file":"api.go:15","lane":"http","desc":"Đăng ký toàn bộ endpoint /api/* vào ServeMux."},{"fn":"guard()","file":"main.go:172","lane":"http","desc":"Middleware chặn mọi request có Host không phải loopback — chống DNS rebinding."},{"fn":"show()","file":"main.go:158","lane":"sys","desc":"Mở giao diện: cửa sổ riêng nếu tìm được Chromium, không thì tab trình duyệt thường."},{"fn":"openAppWindow()","file":"main.go:192","lane":"sys","desc":"Chạy Edge/Chrome/Brave ở chế độ --app với profile riêng trong ~/.dima/window."},{"fn":"srv.Serve()","file":"main.go:99","lane":"http","desc":"Phục vụ UI nhúng (embed ui/) và API trên 127.0.0.1."}],"extra":[{"from":3,"to":10,"label":"mở cửa sổ bản đang chạy rồi thoát","kind":"err"}]},{"group":"Vòng đời ứng dụng","name":"Bấm shortcut lần hai","sub":"chống mở hai bản cùng lúc","triggers":[{"screen":"app","btn":"Mở DIMA lần thứ hai khi bản đầu còn chạy","file":"main.go:59"}],"steps":[{"fn":"main()","file":"main.go:24","lane":"sys","desc":"Bản DIMA thứ hai khởi động."},{"fn":"bind()","file":"main.go:121","lane":"sys","desc":"Cổng 7788 đã bị chiếm, không mở listener được."},{"fn":"alreadyServing()","file":"main.go:140","lane":"sys","desc":"GET /api/state thấy trả về appVersion → đúng là một bản DIMA, không phải chương trình lạ."},{"fn":"show()","file":"main.go:158","lane":"sys","desc":"Không dựng server thứ hai. Mở URL của bản đang chạy."},{"fn":"openAppWindow()","file":"main.go:192","lane":"sys","desc":"Cùng --user-data-dir nên trình duyệt đưa đúng cửa sổ cũ lên thay vì mở cửa sổ mới."},{"fn":"return","file":"main.go:65","lane":"sys","desc":"Tiến trình thứ hai thoát ngay. Người dùng chỉ thấy một ứng dụng."}]},{"group":"Vòng đời ứng dụng","name":"Đóng cửa sổ → thoát","sub":"trừ khi còn build đang chạy","triggers":[{"screen":"app","btn":"Đóng cửa sổ ứng dụng","file":"main.go:218"}],"steps":[{"fn":"watchWindow()","file":"main.go:218","lane":"sys","desc":"Goroutine chờ tiến trình trình duyệt của cửa sổ ứng dụng kết thúc."},{"fn":"cmd.Wait()","file":"main.go:220","lane":"sys","desc":"Trả về khi cửa sổ đóng."},{"fn":"< 3 giây?","file":"main.go:226","lane":"sys","desc":"Một số trình duyệt bàn giao cho tiến trình khác rồi thoát ngay — trả về quá nhanh nghĩa là \"đó không phải cửa sổ của ta\", giữ server chạy tiếp."},{"fn":"HasRunningBuild()","file":"store.go:725","lane":"store","desc":"Còn build nào đang chạy không? Còn thì in thông báo và để ứng dụng sống tiếp.","edge":"đủ lâu"},{"fn":"os.Exit(0)","file":"main.go:235","lane":"sys","desc":"Không còn việc gì — dừng hẳn và trả lại cổng."}]},{"group":"Cấu hình","name":"Nạp trạng thái & vẽ giao diện","sub":"refresh() — vòng đồng bộ trung tâm","triggers":[{"screen":"app","btn":"Tự chạy mỗi 5 giây","sel":"setInterval","file":"ui:1737"},{"screen":"app","btn":"Sau mọi thao tác ghi dữ liệu","file":"ui:552"}],"steps":[{"fn":"refresh()","file":"ui:552","lane":"ui","desc":"Hàm đồng bộ trung tâm của giao diện. Vòng lặp 5 giây bỏ qua khi đang mở hộp thoại."},{"fn":"api()","file":"ui:435","lane":"ui","desc":"fetch JSON, gặp lỗi thì ném ra message của server."},{"fn":"guard()","file":"main.go:172","lane":"http","desc":"Kiểm Host là loopback rồi mới cho đi tiếp."},{"fn":"api.state()","file":"api.go:59","lane":"http","desc":"Gom mọi thứ giao diện cần vào một response duy nhất."},{"fn":"Store.Config()","file":"store.go:504","lane":"store","desc":"Đọc cấu hình dưới RLock."},{"fn":"Store.Builds()","file":"store.go:650","lane":"store","desc":"Trả bản sao lịch sử build, mới nhất trước."},{"fn":"DockerVersion()","file":"builder.go:454","lane":"runner","desc":"Daemon có sống không. Kết quả được nhớ 10 giây, vì giao diện poll vài giây một lần và giá trị này gần như không đổi."},{"fn":"BuildxOK()","file":"builder.go:287","lane":"runner","desc":"Có docker buildx thì promote đi thẳng trên registry."},{"fn":"writeJSON()","file":"api.go:34","lane":"http","desc":"Đóng gói config + builds + trạng thái docker."},{"fn":"render()","file":"ui:576","lane":"ui","desc":"Selection trỏ vào dự án/môi trường đã bị xóa thì lùi về Tổng quan."},{"fn":"renderRail()","file":"ui:623","lane":"ui","desc":"Cột trái: nhóm gấp/mở được, dự án và môi trường bên trong."},{"fn":"renderPane()","file":"ui:656","lane":"ui","desc":"Khung phải: Tổng quan, màn hình Dự án, hoặc màn hình Môi trường."}]},{"group":"Cấu hình","name":"Lưu cài đặt dự án / môi trường","sub":"mỗi lần lưu là một bản sao lưu","triggers":[{"screen":"project","btn":"Cài đặt dự án","sel":"#doSettings","file":"ui:785"},{"screen":"env","btn":"Cài đặt môi trường","sel":"#doEnvSettings","file":"ui:849"},{"screen":"env","btn":"Cài đặt dự án","sel":"#doProjSettings","file":"ui:850"}],"steps":[{"fn":"projectDialog()","file":"ui:1249","lane":"ui","desc":"Form dự án: registry, image, Dockerfile, platform, target, cờ thêm, build args, labels, chế độ phát hành."},{"fn":"envDialog()","file":"ui:1349","lane":"ui","desc":"Form môi trường: chỉ khai phần khác dự án, ô trống hiện sẵn \"kế thừa: …\"."},{"fn":"cloneConfig()","file":"ui:573","lane":"ui","desc":"Deep-copy cấu hình hiện tại để sửa mà không đụng state đang hiển thị."},{"fn":"saveConfig()","file":"ui:566","lane":"ui","desc":"PUT toàn bộ config lên server."},{"fn":"api.saveConfig()","file":"api.go:71","lane":"http","desc":"Bắt buộc: dự án có tên, môi trường có tên, image hiệu lực khác rỗng, tiền tố tag không chứa khoảng trắng hay : / \\."},{"fn":"Project.Effective()","file":"store.go:124","lane":"store","desc":"Dùng để kiểm tra image hiệu lực — khai ở dự án hay ở môi trường đều được."},{"fn":"Store.SaveConfig()","file":"store.go:523","lane":"store","desc":"Ghi dưới Lock."},{"fn":"snapshotConfigLocked()","file":"store.go:512","lane":"store","desc":"Chép config.json hiện tại sang ~/.dima/versions/config-<thời gian>.json trước khi đè."},{"fn":"normalise()","file":"store.go:423","lane":"store","desc":"Cấp id cho dự án/môi trường mới, dọn khoảng trắng, chốt các giá trị mặc định."},{"fn":"writeConfigFile()","file":"store.go:496","lane":"store","desc":"MarshalIndent rồi ghi đè config.json."},{"fn":"refresh()","file":"ui:552","lane":"ui","desc":"Kéo lại state đã normalise để giao diện thấy đúng id vừa được cấp."}],"extra":[{"from":4,"to":10,"label":"400 — báo lỗi, không ghi gì","kind":"err"}]},{"group":"Cấu hình","name":"Chọn thư mục mã nguồn","sub":"hộp thoại của hệ điều hành + kiểm tra khi gõ","triggers":[{"screen":"project","btn":"Cài đặt dự án › Chọn thư mục","sel":"#pick-ctx","file":"ui:1306"},{"screen":"env","btn":"Cài đặt môi trường › Chọn thư mục","sel":"#pick-ctx","file":"ui:1404"}],"steps":[{"fn":"mountPath()","file":"ui:1153","lane":"ui","desc":"Gắn ô đường dẫn: nút Chọn thư mục, debounce 350ms khi gõ tay, dòng trạng thái ngay dưới."},{"fn":"POST /api/pick-folder","file":"ui:1200","lane":"ui","desc":"Trang web không bao giờ được biết đường dẫn thật, nên phải nhờ tiến trình DIMA mở hộp thoại."},{"fn":"api.pickFolder()","file":"api.go:119","lane":"http","desc":"Gọi hộp thoại chọn thư mục của hệ điều hành."},{"fn":"pickFolder()","file":"picker_windows.go:19","lane":"sys","desc":"Windows: hộp thoại Shell. macOS/Linux: osascript / zenity / kdialog."},{"fn":"inspectFolder()","file":"api.go:152","lane":"http","desc":"Thư mục có tồn tại không, có đúng Dockerfile đang khai không, đang có sẵn những Dockerfile nào."},{"fn":"render(info)","file":"ui:1156","lane":"ui","desc":"Hiện xanh \"đã thấy Dockerfile\", hoặc đỏ kèm danh sách Dockerfile đang có trong thư mục."}],"extra":[{"from":0,"to":4,"label":"gõ tay → GET /api/inspect-folder","kind":"loop"}]},{"group":"Cấu hình","name":"Quét thư mục thêm hàng loạt","sub":"tìm Dockerfile trong các thư mục con","triggers":[{"screen":"rail","btn":"Quét thư mục…","sel":"#scanFolders","file":"ui:1714"}],"steps":[{"fn":"importDialog()","file":"ui:1481","lane":"ui","desc":"Chọn một thư mục cha, một nhóm và một registry áp cho tất cả."},{"fn":"scan()","file":"ui:1541","lane":"ui","desc":"Chạy khi chọn xong thư mục, hoặc 500ms sau lần gõ cuối."},{"fn":"api.scanFolder()","file":"api.go:206","lane":"http","desc":"Đi sâu tối đa ba tầng từ thư mục cha. Thư mục cha tự nó cũng có thể là một dự án."},{"fn":"skipDir()","file":"api.go:255","lane":"http","desc":"Bỏ qua node_modules, vendor, dist, build, target, bin, obj, .git và mọi thư mục ẩn."},{"fn":"dockerfileIn()","file":"api.go:265","lane":"http","desc":"Thấy Dockerfile là ghi nhận một dự án và dừng, không chui tiếp vào trong nó."},{"fn":"drawHits()","file":"ui:1517","lane":"ui","desc":"Danh sách tích chọn. Thư mục đã có dự án trỏ tới hiện \"đã có\" và không tích được → quét lại nhiều lần cũng không tạo trùng."},{"fn":"cloneConfig()","file":"ui:573","lane":"ui","desc":"Mỗi mục được chọn thành một dự án rebuild, kèm sẵn hai môi trường Staging và Production."},{"fn":"saveConfig()","file":"ui:566","lane":"ui","desc":"PUT /api/config một lần cho cả lô."},{"fn":"Store.SaveConfig()","file":"store.go:523","lane":"store","desc":"Sao lưu bản cũ, normalise cấp id, ghi file."},{"fn":"refresh()","file":"ui:552","lane":"ui","desc":"Về Tổng quan, thấy ngay các dự án vừa thêm."}]},{"group":"Cấu hình","name":"Quét image có sẵn trên máy","sub":"đưa image đang có trong Docker vào DIMA","triggers":[{"screen":"rail","btn":"Quét image…","sel":"#scanImages","file":"ui:1715"}],"steps":[{"fn":"imagesDialog()","file":"ui:1604","lane":"ui","desc":"Mỗi repository thành một dự án; các tag của nó thành phiên bản hiện luôn trong bảng version."},{"fn":"Store.LocalImages()","file":"builder.go:421","lane":"runner","desc":"Hỏi docker bằng template tab thay vì --format json: tên field của JSON từng đổi giữa các bản docker, còn template này ổn định nhiều năm."},{"fn":"docker images","file":"docker CLI","lane":"sys","desc":"{{.Repository}}\\t{{.Tag}}\\t{{.ID}}\\t{{.Size}}\\t{{.CreatedSince}}\\t{{.CreatedAt}} — bỏ qua dòng <none>."},{"fn":"GroupImages()","file":"images.go:78","lane":"store","desc":"Gộp danh sách phẳng thành một mục cho mỗi repository, mới nhất trước."},{"fn":"splitRepository()","file":"images.go:47","lane":"store","desc":"Đoạn đầu chỉ là registry khi trông như một host — có dấu chấm, có cổng, hoặc là localhost. Đúng quy tắc docker dùng, nên moby/buildkit là image trên Docker Hub còn harbor.tech/mm/app thì không."},{"fn":"classifyTag()","file":"images.go:61","lane":"store","desc":"Tách staging-1.2.3 thành tiền tố + version. Tag phải chứa chữ số mới tính là bản phát hành, nên latest, cache, stable bị loại."},{"fn":"api.listImages()","file":"api.go:287","lane":"http","desc":"Đánh dấu repository nào đã có dự án trỏ tới để màn hình làm mờ, không import trùng."},{"fn":"draw()","file":"ui:1637","lane":"ui","desc":"Image của registry riêng được tích sẵn; image kéo từ Docker Hub ẩn đi cho tới khi tích \"Hiện cả image tải về từ Docker Hub\"."},{"fn":"api.importImages()","file":"api.go:318","lane":"http","desc":"Biến các repository đã chọn thành dự án."},{"fn":"ImageRepo.EnvsFor()","file":"images.go:124","lane":"store","desc":"Mỗi tiền tố tag thành một môi trường; không có tiền tố nào thì dự án được một môi trường \"Mặc định\"."},{"fn":"envNameFor()","file":"images.go:141","lane":"store","desc":"prod- → Production, stg- → Staging, dev- → Development, qa- → Test, uat- → UAT."},{"fn":"recordExistingTags()","file":"api.go:374","lane":"http","desc":"Mỗi tag là phiên bản được ghi thành một mục lịch sử kind=import, đề ngày theo lúc image được tạo — nhờ vậy bảng version xếp đúng thứ tự."},{"fn":"Store.SaveConfig()","file":"store.go:523","lane":"store","desc":"Sao lưu bản cũ rồi ghi cấu hình có các dự án mới."},{"fn":"refresh()","file":"ui:552","lane":"ui","desc":"Toast báo đã thêm bao nhiêu dự án, ghi nhận bao nhiêu phiên bản."}]},{"group":"Cấu hình","name":"Thêm dự án / thêm môi trường","sub":"lưu trước để lấy id, rồi mở form","triggers":[{"screen":"rail","btn":"+ Tạo mới","sel":"#addProject","file":"ui:1717"},{"screen":"rail","btn":"+ cạnh dự án","sel":"[data-addenv]","file":"ui:653"}],"steps":[{"fn":"#addProject.onclick","file":"ui:1717","lane":"ui","desc":"Đẩy một dự án mẫu (image my-api, một môi trường Staging) vào bản sao cấu hình."},{"fn":"addEnv()","file":"ui:1698","lane":"ui","desc":"Hoặc: thêm một môi trường trống vào dự án đang chọn."},{"fn":"saveConfig()","file":"ui:566","lane":"ui","desc":"Lưu ngay, vì id do server cấp chứ không do giao diện tự đặt."},{"fn":"normalise()","file":"store.go:423","lane":"store","desc":"Mọi id rỗng được cấp một id mới, ổn định."},{"fn":"projectDialog()","file":"ui:1249","lane":"ui","desc":"Mở form của bản ghi vừa được tạo để điền tiếp."}]},{"group":"Cấu hình","name":"Bản lưu & khôi phục cấu hình","sub":"quay lại bất kỳ lần lưu nào","triggers":[{"screen":"overview","btn":"Lịch sử cài đặt","sel":"#doVersions","file":"ui:716"},{"screen":"project","btn":"Lịch sử cài đặt","sel":"#doVersions","file":"ui:786"}],"steps":[{"fn":"versionsDialog()","file":"ui:1444","lane":"ui","desc":"Liệt kê các bản config cũ theo thời gian, kèm nút Xem và Khôi phục."},{"fn":"api.listVersions()","file":"api.go:448","lane":"http","desc":"GET /api/config/versions"},{"fn":"Store.Snapshots()","file":"store.go:541","lane":"store","desc":"Chỉ nhận file config-*.json trong ~/.dima/versions; file sao lưu history bị loại ra."},{"fn":"api.readVersion()","file":"api.go:452","lane":"http","desc":"Nút \"Xem\": trả nguyên văn JSON của bản lưu."},{"fn":"api.restoreVersion()","file":"api.go:462","lane":"http","desc":"Nút \"Khôi phục\", sau khi người dùng xác nhận."},{"fn":"RestoreSnapshot()","file":"store.go:567","lane":"store","desc":"Tên file phải là base name thuần — chặn đường dẫn leo ra ngoài thư mục versions."},{"fn":"decodeConfig()","file":"store.go:327","lane":"store","desc":"Bản lưu hỏng thì báo lỗi, không đụng tới cấu hình đang chạy."},{"fn":"Store.SaveConfig()","file":"store.go:523","lane":"store","desc":"Cấu hình hiện tại được sao lưu trước khi bị thay — khôi phục cũng hoàn tác được."},{"fn":"refresh()","file":"ui:552","lane":"ui","desc":"Giao diện vẽ lại theo cấu hình vừa khôi phục."}]},{"group":"Cấu hình","name":"Nâng cấp dữ liệu 0.1.x → 0.2.0","sub":"chạy một lần, lúc mở app lần đầu","triggers":[{"screen":"app","btn":"Mở lần đầu sau khi nâng cấp","file":"store.go:475"}],"steps":[{"fn":"loadConfig()","file":"store.go:475","lane":"store","desc":"Đọc config.json có sẵn của bản cũ."},{"fn":"decodeConfig()","file":"store.go:327","lane":"store","desc":"Dò schema: không có mảng projects mà có environments → đây là schema v1."},{"fn":"migrateV1()","file":"store.go:357","lane":"store","desc":"Gom toàn bộ môi trường cũ vào một dự án tên \"Dự án của tôi\", chế độ rebuild — đúng hành vi cũ."},{"fn":"liftCommon()","file":"store.go:383","lane":"store","desc":"Cài đặt nào mọi môi trường đều giống nhau thì nâng lên cấp dự án và xóa ở môi trường. Giá trị hiệu lực không đổi."},{"fn":"normalise()","file":"store.go:423","lane":"store","desc":"Cấp id, dọn dữ liệu."},{"fn":"snapshotConfigLocked()","file":"store.go:512","lane":"store","desc":"Bản cũ được cất vào versions/ TRƯỚC khi ghi đè — khôi phục lại được bất cứ lúc nào."},{"fn":"writeConfigFile()","file":"store.go:496","lane":"store","desc":"Ghi cấu trúc mới ra đĩa."},{"fn":"migrateHistory()","file":"store.go:612","lane":"store","desc":"Lịch sử build cũ được gắn version (lấy chính tag cũ) và gắn vào dự án."}]},{"group":"Build & phát hành","name":"Build một version","sub":"từ hộp thoại tới docker build","triggers":[{"screen":"project","btn":"Build","sel":"#doBuild","file":"ui:779"},{"screen":"project","btn":"Build — ô trống trong bảng version","sel":"[data-buildver]","file":"ui:817"},{"screen":"env","btn":"Build","sel":"#doBuild","file":"ui:847"}],"steps":[{"fn":"buildDialog()","file":"ui:1026","lane":"ui","desc":"Hỏi version. Gợi ý bản patch/minor kế tiếp dựa trên version mới nhất của dự án, kèm một gợi ý theo dấu thời gian."},{"fn":"refOf()","file":"ui:501","lane":"ui","desc":"Xem trước ref sẽ tạo ra, cập nhật ngay khi gõ."},{"fn":"POST /api/build","file":"ui:1065","lane":"ui","desc":"{ envId, version, push }"},{"fn":"api.startBuild()","file":"api.go:471","lane":"http","desc":"Cổng vào phía server của mọi lệnh build."},{"fn":"Config.FindEnv()","file":"store.go:199","lane":"store","desc":"Tìm cặp dự án + môi trường theo envId."},{"fn":"Project.CanBuild()","file":"store.go:159","lane":"store","desc":"Dự án chạy kiểu promote thì chỉ môi trường nguồn được build — 409 nếu không phải."},{"fn":"checkBuildable()","file":"api.go:421","lane":"http","desc":"Thư mục context có thật không, Dockerfile có nằm trong đó không. Chặn ở đây để khỏi để docker fail ở một thư mục vu vơ."},{"fn":"checkVersion()","file":"api.go:48","lane":"http","desc":"Version không rỗng và không chứa khoảng trắng hay : / \\ — những ký tự docker không nhận trong tag."},{"fn":"Store.Start()","file":"builder.go:152","lane":"runner","desc":"Tạo bản ghi build, chạy nền, trả về ngay cho giao diện."},{"fn":"Project.Effective()","file":"store.go:124","lane":"store","desc":"Ô chữ: môi trường thắng. Build args & labels: trộn theo key. Cờ thêm: nối dự án rồi tới môi trường."},{"fn":"Env.Ref()","file":"store.go:188","lane":"store","desc":"registry/image:tiền-tố+version"},{"fn":"buildArgv()","file":"builder.go:116","lane":"runner","desc":"Dựng dòng lệnh: -t, -f, --build-arg, --label, --platform, --target, cờ thêm, rồi context."},{"fn":"Store.addBuild()","file":"store.go:670","lane":"store","desc":"Ghi vào history.json và nhớ version mới nhất của môi trường."},{"fn":"Store.logFor()","file":"builder.go:60","lane":"runner","desc":"Mở buffer log trong bộ nhớ, đồng thời ghi ra ~/.dima/logs/<build-id>.log."},{"fn":"Store.run()","file":"builder.go:358","lane":"runner","desc":"exec docker build trong thư mục context, stdout+stderr chảy thẳng vào buffer log."},{"fn":"docker build","file":"docker CLI","lane":"sys","desc":"Tiến trình con, hủy được bằng context."},{"fn":"docker push","file":"builder.go:196","lane":"sys","desc":"Chỉ khi có tích \"Push sau khi build\". Build xong mà push lỗi thì trạng thái nói rõ như vậy."},{"fn":"Store.digest()","file":"builder.go:378","lane":"runner","desc":"docker inspect lấy RepoDigests — cái làm nên lệnh pull bất biến và làm được promote sau này."},{"fn":"Store.finish()","file":"builder.go:397","lane":"runner","desc":"Chốt status success/failed/canceled, đóng log, lưu lịch sử."},{"fn":"loadLog()","file":"ui:970","lane":"ui","desc":"Giao diện mở panel log và bắt đầu poll."}],"extra":[{"from":5,"to":19,"label":"409","kind":"err"},{"from":6,"to":19,"label":"400","kind":"err"}]},{"group":"Build & phát hành","name":"Nhật ký trực tiếp","sub":"poll 800ms theo offset","triggers":[{"screen":"env","btn":"thẻ build — mở ra","sel":"[data-b]","file":"ui:873"}],"steps":[{"fn":"loadLog()","file":"ui:970","lane":"ui","desc":"Chỉ chạy khi panel của build đó đang mở."},{"fn":"api.buildLog()","file":"api.go:569","lane":"http","desc":"Xin phần log kể từ vị trí đã nhận, không kéo lại từ đầu."},{"fn":"Store.LogSince()","file":"builder.go:76","lane":"runner","desc":"Build đang chạy thì đọc từ buffer; build đã xong thì đọc từ file log trên đĩa."},{"fn":"logBuffer.since()","file":"builder.go:41","lane":"runner","desc":"Cắt đoạn mới kể từ offset, trả kèm offset kế tiếp."},{"fn":"nối vào <pre>","file":"ui:983","lane":"ui","desc":"Đang ở đáy thì tự cuộn theo; đang đọc ở giữa thì giữ nguyên chỗ đang đọc."},{"fn":"status !== running?","file":"ui:986","lane":"ui","desc":"Còn chạy thì hẹn 800ms gọi lại. Xong rồi thì dừng poll và refresh() nếu trạng thái đã đổi."}],"extra":[{"from":5,"to":0,"label":"còn running → 800ms sau","kind":"loop"}]},{"group":"Build & phát hành","name":"Push bản build chưa push","sub":"build trước, đẩy sau","triggers":[{"screen":"detail","btn":"Push","sel":"[data-push]","file":"ui:885"}],"steps":[{"fn":"nút Push","file":"ui:885","lane":"ui","desc":"Chỉ hiện trên bản build thành công mà chưa lên registry."},{"fn":"api.pushBuild()","file":"api.go:583","lane":"http","desc":"POST /api/build/{id}/push"},{"fn":"Store.Build()","file":"store.go:659","lane":"store","desc":"Lấy bản ghi build theo id."},{"fn":"Config.FindEnv()","file":"store.go:199","lane":"store","desc":"Tìm lại thư mục context để chạy lệnh đúng chỗ."},{"fn":"PushExisting()","file":"builder.go:220","lane":"runner","desc":"Nối tiếp vào đúng file log cũ của bản build đó."},{"fn":"docker push","file":"docker CLI","lane":"sys","desc":"Đẩy ref đã dựng lúc build lên registry."},{"fn":"Store.digest()","file":"builder.go:378","lane":"runner","desc":"Giờ mới có digest — từ đây bản này mới promote được."},{"fn":"Store.updateBuild()","file":"store.go:677","lane":"store","desc":"Đánh dấu pushed, cập nhật digest, lưu history."},{"fn":"refresh()","file":"ui:552","lane":"ui","desc":"Thẻ build đổi sang trạng thái đã push."}]},{"group":"Build & phát hành","name":"Promote / Rollback","sub":"gắn thêm tag, giữ nguyên digest","triggers":[{"screen":"project","btn":"Promote — ô trống trong bảng version","sel":"[data-promote]","file":"ui:812"},{"screen":"detail","btn":"Đưa lên <môi trường>","sel":"[data-sendto]","file":"ui:910"}],"steps":[{"fn":"promoteDialog()","file":"ui:1081","lane":"ui","desc":"Chọn môi trường đích và version. Cảnh báo nếu máy không có buildx."},{"fn":"cảnh báo trùng version","file":"ui:1115","lane":"ui","desc":"Môi trường đích từng nhận đúng version này với một image khác → nói rõ tag sẽ bị trỏ sang image mới."},{"fn":"api.promoteBuild()","file":"api.go:511","lane":"http","desc":"POST /api/build/{id}/promote"},{"fn":"status === success?","file":"api.go:527","lane":"http","desc":"Chỉ promote được bản build thành công."},{"fn":"pushed && digest?","file":"api.go:531","lane":"http","desc":"Chưa lên registry thì chưa có digest để trỏ tag mới vào — phải push trước."},{"fn":"cùng dự án, khác env","file":"api.go:540","lane":"http","desc":"Hai môi trường của một dự án dùng chung repository."},{"fn":"tag đích ≠ tag nguồn","file":"api.go:560","lane":"http","desc":"Thiếu tiền tố tag khác nhau thì promote sẽ trỏ tag nguồn vào chính nó và chẳng thay đổi gì — 409 kèm hướng dẫn sửa."},{"fn":"Store.Promote()","file":"builder.go:294","lane":"runner","desc":"Không build lại. Digest kết quả bằng đúng digest nguồn — chính chỗ đó làm rollback chỉ là promote một version cũ."},{"fn":"repoOf()","file":"builder.go:244","lane":"runner","desc":"Cắt tag khỏi ref để ghép thành repo@digest. Dấu hai chấm của cổng registry không bị nhầm là tag."},{"fn":"buildxAvailable()","file":"builder.go:275","lane":"runner","desc":"Kiểm một lần cho cả phiên chạy — câu trả lời không đổi khi app còn mở."},{"fn":"promoteSteps()","file":"builder.go:262","lane":"runner","desc":"Có buildx: imagetools create, làm thẳng trên registry. Không có: pull → tag → push."},{"fn":"Store.run()","file":"builder.go:358","lane":"runner","desc":"Chạy từng bước, lỗi bước nào dừng ngay ở bước đó."},{"fn":"docker buildx imagetools","file":"docker CLI","lane":"sys","desc":"Không truyền dữ liệu qua máy, giữ nguyên manifest đa kiến trúc."},{"fn":"Store.finish()","file":"builder.go:397","lane":"runner","desc":"Ghi \"Xong. Digest giữ nguyên: …\" vào log rồi chốt trạng thái."}],"extra":[{"from":3,"to":13,"label":"409","kind":"err"},{"from":6,"to":13,"label":"409","kind":"err"}]},{"group":"Build & phát hành","name":"Dừng build giữa chừng","sub":"hủy tiến trình docker đang chạy","triggers":[{"screen":"detail","btn":"Dừng build","sel":"[data-cancel]","file":"ui:893"}],"steps":[{"fn":"nút Dừng build","file":"ui:893","lane":"ui","desc":"Chỉ hiện khi build đang chạy."},{"fn":"api.cancelBuild()","file":"api.go:601","lane":"http","desc":"POST /api/build/{id}/cancel — 409 nếu build đã kết thúc."},{"fn":"Store.Cancel()","file":"builder.go:99","lane":"runner","desc":"Tra hàm hủy đã đăng ký theo build id."},{"fn":"context cancel","file":"builder.go:152","lane":"runner","desc":"Hủy context mà lệnh docker đang gắn vào."},{"fn":"exec kill","file":"docker CLI","lane":"sys","desc":"CommandContext kết liễu tiến trình con."},{"fn":"Store.run()","file":"builder.go:358","lane":"runner","desc":"Trả về lỗi; ctx.Err() khác nil nên đây là hủy chứ không phải build hỏng."},{"fn":"Store.finish()","file":"builder.go:397","lane":"runner","desc":"Chốt trạng thái canceled."},{"fn":"loadLog()","file":"ui:970","lane":"ui","desc":"Lần poll kế tiếp thấy status đã đổi → dừng poll và refresh()."}]},{"group":"Build & phát hành","name":"Xóa một bản build khỏi lịch sử","sub":"xóa cả file log","triggers":[{"screen":"detail","btn":"Xóa khỏi lịch sử","sel":"[data-del]","file":"ui:900"}],"steps":[{"fn":"nút Xóa khỏi lịch sử","file":"ui:900","lane":"ui","desc":"Hỏi xác nhận trước. Image trên registry không bị đụng tới."},{"fn":"api.deleteBuild()","file":"api.go:609","lane":"http","desc":"DELETE /api/build/{id} → 204."},{"fn":"Store.DeleteBuild()","file":"store.go:689","lane":"store","desc":"Bỏ bản ghi khỏi danh sách, xóa luôn file ~/.dima/logs/<id>.log."},{"fn":"persistHistoryLocked()","file":"store.go:641","lane":"store","desc":"Ghi lại history.json."},{"fn":"refresh()","file":"ui:552","lane":"ui","desc":"Bảng lịch sử vẽ lại."}]}]};
+/* DATA-END */
+/* SRC-BEGIN */
+const SRC_STAMP = "2026-09-22 10:08";
+const SRC = {"renderRail()":{"sig":"function renderRail(){","code":"function renderRail(){\n  const sel = state.sel;\n  const html = [`<button class=\"nav-top ${sel.kind==='overview'?'sel':''}\" data-overview>Tổng quan</button>`];\n  const pairs = grouped();\n  // With nothing grouped yet, showing a \"Chưa phân nhóm\" header would be\n  // noise, so the list stays flat until the first group exists.\n  const anyGroup = pairs.some(([g]) => g);\n\n  pairs.forEach(([g, list]) => {\n    if (anyGroup){\n      const shut = state.collapsed.has(g);\n      html.push(`<button class=\"grp\" data-grp=\"${esc(g)}\">\n        <span class=\"grp-caret\">${shut ? '▸' : '▾'}</span>\n        <span class=\"grp-name\">${esc(g || 'Chưa phân nhóm')}</span>\n        <span class=\"grp-count\">${list.length}</span>\n      </button>`);\n      if (shut) return;\n    }\n    list.forEach(p => html.push(projectHTML(p, sel, anyGroup)));\n  });\n\n  if (!projects().length){\n    html.push(`<div class=\"kv-empty\" style=\"padding:14px 16px\">Chưa có dự án nào.</div>`);\n  }\n  $('#rail').innerHTML = html.join('');\n\n  $$('[data-overview]').forEach(el => el.onclick = () => { state.sel = {kind:'overview'}; render(); });\n  $$('[data-grp]', $('#rail')).forEach(el => el.onclick = () => toggleGroup(el.dataset.grp));\n  $$('[data-proj]', $('#rail')).forEach(el => el.onclick = () => { state.sel = {kind:'project', id:el.dataset.proj}; render(); });\n  $$('[data-env]', $('#rail')).forEach(el => el.onclick = () => { state.sel = {kind:'env', id:el.dataset.env}; render(); });\n…","approx":false},"renderOverview()":{"sig":"function renderOverview(){","code":"function renderOverview(){\n  if (!projects().length){\n    $('#pane').innerHTML = `<div class=\"empty\"><strong>Chưa có dự án nào</strong>\n      Bấm “+ Dự án” ở cột trái để tạo dự án đầu tiên.</div>`;\n    return;\n  }\n  const card = p => {\n    const envs = p.envs || [];\n    const body = envs.length\n      ? `<div class=\"tiles\">${envs.map(e => envTile(p, e)).join('')}</div>`\n      : `<div class=\"kv-empty\" style=\"padding:14px\">Dự án này chưa có môi trường nào.</div>`;\n    return `<div class=\"pcard\">\n      <div class=\"pcard-head\">\n        <h3>${esc(p.name)}</h3>\n        <span class=\"mode ${p.releaseMode==='promote'?'promote':''}\">${esc(p.releaseMode||'rebuild')}</span>\n        <span class=\"ref\" style=\"margin-left:auto\">${esc(repoOf(effective(p, envs[0] || {})))}</span>\n      </div>${body}\n    </div>`;\n  };\n\n  const pairs = grouped();\n  const anyGroup = pairs.some(([g]) => g);\n  const cards = pairs.map(([g, list]) =>\n    (anyGroup ? `<div class=\"section-label\">${esc(g || 'Chưa phân nhóm')} <span class=\"count\">${list.length}</span></div>` : '')\n    + list.map(card).join('')\n  ).join('');\n\n  $('#pane').innerHTML = `\n    <div class=\"pane-head\">\n      <div><h1>Tổng quan</h1>\n…","approx":false},"renderProject()":{"sig":"function renderProject(p){","code":"/* ---------- project: the version ledger ---------- */\nfunction renderProject(p){\n  const envs = p.envs || [];\n  const rows = versionRows(p);\n  const srcId = buildEnvId(p);\n  const modeNote = p.releaseMode === 'promote'\n    ? `Build một lần ở <b>${esc((envs.find(e => e.id === srcId)||{}).name || '—')}</b>, rồi promote chính image đó sang các môi trường khác.`\n    : `Mỗi môi trường build lại từ mã nguồn với build args của nó.`;\n\n  const head = `<tr><th>Version</th>${envs.map(e => `<th>${esc(e.name)}</th>`).join('')}</tr>`;\n  const body = rows.length ? rows.map(r => `<tr>\n      <td class=\"mx-ver\">${esc(r.version)}</td>\n      ${envs.map(e => `<td>${cellHTML(p, e, r.version, r.cells[e.id])}</td>`).join('')}\n    </tr>`).join('') : '';\n\n  $('#pane').innerHTML = `\n    <div class=\"pane-head\">\n      <div><h1>${esc(p.name)}</h1>\n        <div class=\"ref\">${esc(repoOf(effective(p, envs[0] || {})))}</div>\n        <div class=\"note\">${modeNote}</div>\n        ${contextWarning(p, envs)}</div>\n      <div class=\"actions\">\n        ${srcId || p.releaseMode !== 'promote'\n          ? `<button class=\"btn primary\" id=\"doBuild\">Build</button>` : ''}\n        <button class=\"btn\" id=\"doSettings\">Cài đặt dự án</button>\n        <button class=\"btn\" id=\"doVersions\">Lịch sử cài đặt</button>\n      </div>\n    </div>\n    <div class=\"section-label\">Môi trường <span class=\"count\">${envs.length}</span></div>\n    ${envs.length ? `<div class=\"pcard\"><div class=\"tiles\">${envs.map(e => envTile(p, e)).join('')}</div></div>`\n                  : `<div class=\"empty\"><strong>Chưa có môi trường nào</strong>Thêm một môi trường ở cột trái.</div>`}\n…","approx":false},"renderEnv()":{"sig":"function renderEnv(p, e){","code":"/* ---------- environment: settings summary + history ---------- */\nfunction renderEnv(p, e){\n  const ev = effective(p, e);\n  const list = buildsOfEnv(e.id);\n  const allowed = canBuild(p, e.id);\n  const srcName = (( p.envs || []).find(x => x.id === buildEnvId(p)) || {}).name || '—';\n\n  $('#pane').innerHTML = `\n    <div class=\"pane-head\">\n      <div>\n        <h1>${esc(e.name)}</h1>\n        <div class=\"ref\">${esc(repoOf(ev))}:${esc(tagOf(ev, e.lastVersion || 'VERSION'))}</div>\n        <div class=\"note\">Thuộc dự án <b>${esc(p.name)}</b>${\n          allowed ? '' : ` · chỉ nhận promote từ <b>${esc(srcName)}</b>`}</div>\n      </div>\n      <div class=\"actions\">\n        ${allowed ? `<button class=\"btn primary\" id=\"doBuild\">Build</button>` : ''}\n        <button class=\"btn\" id=\"doEnvSettings\">Cài đặt môi trường</button>\n        <button class=\"btn\" id=\"doProjSettings\">Cài đặt dự án</button>\n      </div>\n    </div>\n    <div class=\"section-label\">Các bản đã về ${esc(e.name)} <span class=\"count\">${list.length}</span></div>\n    <div id=\"buildList\"></div>`;\n\n  const b = $('#doBuild');\n  if (b) b.onclick = () => buildDialog(p, e);\n  $('#doEnvSettings').onclick = () => envDialog(p, e);\n  $('#doProjSettings').onclick = () => projectDialog(p);\n  renderBuilds(p, e, list);\n}","approx":false},"detailHTML()":{"sig":"function detailHTML(p, e, b){","code":"function detailHTML(p, e, b){\n  const pull = 'docker pull ' + (b.digest ? repoOf(effective(p, e)) + '@' + b.digest : b.ref);\n  const canSend = b.status === 'success' && b.pushed && b.digest;\n  const targets = (p.envs || []).filter(x => x.id !== e.id);\n  const sendButtons = canSend && targets.length\n    ? targets.map(t => `<button class=\"btn sm\" data-sendto=\"${esc(b.id)}\" data-target=\"${esc(t.id)}\">Đưa lên ${esc(t.name)}</button>`).join('')\n    : '';\n\n  return `<div class=\"detail\">\n    <div class=\"field\">\n      <div class=\"field-name\">Lệnh pull trên server</div>\n      <div class=\"copyline\">\n        <code>${esc(pull)}</code>\n        <button class=\"btn sm\" data-copy=\"${esc(pull)}\">Chép</button>\n      </div>\n    </div>\n    <div class=\"field\">\n      <div class=\"field-name\">Tag trên registry</div>\n      <div class=\"copyline\"><code>${esc(b.ref)}</code>\n      <button class=\"btn sm\" data-copy=\"${esc(b.ref)}\">Chép</button></div>\n    </div>\n    ${b.digest ? `<div class=\"field\"><div class=\"field-name\">Digest${\n      b.sourceBuildId ? ' — giống hệt bản nguồn, đây đúng là image đã test' : ''}</div>\n      <div class=\"copyline\"><code>${esc(b.digest)}</code>\n      <button class=\"btn sm\" data-copy=\"${esc(b.digest)}\">Chép</button></div></div>` : ''}\n    ${b.err ? `<div class=\"field err\">${esc(b.err)}</div>` : ''}\n    <div class=\"field\">\n      <div class=\"field-name\">Nhật ký</div>\n      <pre class=\"log\" id=\"log-${esc(b.id)}\">${esc(state.logText.get(b.id) ?? 'đang tải…')}</pre>\n    </div>\n…","approx":false},"main.go":{"sig":"func main() {","code":"\nconst appVersion = \"0.2.0\"\n\nfunc main() {\n\t// Windows builds have no console of their own; pick up the terminal's if\n\t// this was started from one.\n\tattachConsole()\n\n\tvar (","approx":true},"main()":{"sig":"func main() {","code":"func main() {\n\t// Windows builds have no console of their own; pick up the terminal's if\n\t// this was started from one.\n\tattachConsole()\n\n\tvar (\n\t\tport    = flag.Int(\"port\", 7788, \"cổng lắng nghe trên localhost\")\n\t\tdataDir = flag.String(\"data\", \"\", \"thư mục dữ liệu (mặc định ~/.dima)\")\n\t\tnoOpen  = flag.Bool(\"no-open\", false, \"không tự mở giao diện\")\n\t\tasTab   = flag.Bool(\"tab\", false, \"mở trong tab trình duyệt thường thay vì cửa sổ riêng\")\n\t)\n\tflag.Parse()\n\n\troot := *dataDir\n\tif root == \"\" {\n\t\thome, err := os.UserHomeDir()\n\t\tif err != nil {\n\t\t\tfatal(\"Không xác định được thư mục home\", err.Error())\n\t\t}\n\t\troot = filepath.Join(home, \".dima\")\n\t}\n\n\tprofile := filepath.Join(root, \"window\")\n\n\t// Only honour the port as an exact requirement when the user asked for\n\t// one; otherwise a busy port is something to route around, not to report.\n\tfixedPort := false\n\tflag.Visit(func(f *flag.Flag) {\n\t\tif f.Name == \"port\" {\n\t\t\tfixedPort = true\n…","approx":false},"attachConsole()":{"sig":"func attachConsole() {","code":"// attachConsole reconnects stdout and stderr to the console the program was\n// started from, when there is one. Started from Explorer or a shortcut there\n// is none, and this does nothing.\nfunc attachConsole() {\n\tconst attachParentProcess = ^uintptr(0) // (DWORD)-1\n\tif r, _, _ := kernel32.NewProc(\"AttachConsole\").Call(attachParentProcess); r == 0 {\n\t\treturn\n\t}\n\tf, err := os.OpenFile(\"CONOUT$\", os.O_WRONLY, 0)\n\tif err != nil {\n\t\treturn\n\t}\n\tos.Stdout = f\n\tos.Stderr = f\n\tlog.SetOutput(f)\n}","approx":false},"bind()":{"sig":"func bind(start int, fixed bool) (net.Listener, int, string) {","code":"// docker commands, so it must never be reachable from the network.\n//\n// A busy port is not worth bothering the user about, so unless they named a\n// port it walks forward until it finds a free one. It returns the URL of an\n// existing DIMA instead if one already holds a port along the way, and a nil\n// listener when nothing worked.\nfunc bind(start int, fixed bool) (net.Listener, int, string) {\n\ttries := 20\n\tif fixed {\n\t\ttries = 1\n\t}\n\tfor p := start; p < start+tries; p++ {\n\t\taddr := fmt.Sprintf(\"127.0.0.1:%d\", p)\n\t\tif ln, err := net.Listen(\"tcp\", addr); err == nil {\n\t\t\treturn ln, p, \"\"\n\t\t}\n\t\tif url := \"http://\" + addr; alreadyServing(url) {\n\t\t\treturn nil, p, url\n\t\t}\n\t}\n\treturn nil, 0, \"\"\n}","approx":false},"alreadyServing()":{"sig":"func alreadyServing(url string) bool {","code":"// alreadyServing reports whether the address is held by another DIMA rather\n// than by some unrelated program.\nfunc alreadyServing(url string) bool {\n\tc := http.Client{Timeout: 1500 * time.Millisecond}\n\tresp, err := c.Get(url + \"/api/state\")\n\tif err != nil {\n\t\treturn false\n\t}\n\tdefer resp.Body.Close()\n\tif resp.StatusCode != http.StatusOK {\n\t\treturn false\n\t}\n\tvar probe struct {\n\t\tAppVersion string `json:\"appVersion\"`\n\t}\n\treturn json.NewDecoder(resp.Body).Decode(&probe) == nil && probe.AppVersion != \"\"\n}","approx":false},"OpenStore()":{"sig":"func OpenStore(root string) (*Store, error) {","code":"func OpenStore(root string) (*Store, error) {\n\tfor _, d := range []string{root, filepath.Join(root, \"versions\"), filepath.Join(root, \"logs\")} {\n\t\tif err := os.MkdirAll(d, 0o755); err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t}\n\ts := &Store{\n\t\troot:    root,\n\t\tlogs:    map[string]*logBuffer{},\n\t\tcancels: map[string]func(){},\n\t}\n\tif err := s.loadConfig(); err != nil {\n\t\treturn nil, err\n\t}\n\ts.loadHistory()\n\ts.migrateHistory()\n\treturn s, nil\n}","approx":false},"loadConfig()":{"sig":"func (s *Store) loadConfig() error {","code":"func (s *Store) loadConfig() error {\n\traw, err := os.ReadFile(s.configPath())\n\tif os.IsNotExist(err) {\n\t\ts.config = defaultConfig()\n\t\treturn s.writeConfigFile(s.config)\n\t}\n\tif err != nil {\n\t\treturn err\n\t}\n\tc, migrated, err := decodeConfig(raw)\n\tif err != nil {\n\t\treturn err\n\t}\n\ts.config = c\n\tif migrated {\n\t\ts.snapshotConfigLocked()\n\t\treturn s.writeConfigFile(c)\n\t}\n\treturn nil\n}","approx":false},"decodeConfig()":{"sig":"func decodeConfig(raw []byte) (Config, bool, error) {","code":"// decodeConfig reads either schema and reports whether the bytes had to be\n// migrated, so the caller can snapshot the original before overwriting it.\nfunc decodeConfig(raw []byte) (Config, bool, error) {\n\t// Notepad and PowerShell write UTF-8 with a byte order mark, and the\n\t// config file is meant to be editable by hand on Windows.\n\traw = bytes.TrimPrefix(raw, []byte(\"\\xef\\xbb\\xbf\"))\n\tvar probe struct {\n\t\tSchemaVersion int               `json:\"schemaVersion\"`\n\t\tProjects      []json.RawMessage `json:\"projects\"`\n\t\tEnvironments  []json.RawMessage `json:\"environments\"`\n\t}\n\tif err := json.Unmarshal(raw, &probe); err != nil {\n\t\treturn Config{}, false, fmt.Errorf(\"config.json không đọc được: %w\", err)\n\t}\n\tif probe.Projects == nil && probe.Environments != nil {\n\t\tvar old legacyConfig\n\t\tif err := json.Unmarshal(raw, &old); err != nil {\n\t\t\treturn Config{}, false, fmt.Errorf(\"config.json không đọc được: %w\", err)\n\t\t}\n\t\treturn migrateV1(old), true, nil\n\t}\n\tvar c Config\n\tif err := json.Unmarshal(raw, &c); err != nil {\n\t\treturn Config{}, false, fmt.Errorf(\"config.json không đọc được: %w\", err)\n\t}\n\tstale := c.SchemaVersion < currentSchema\n\treturn normalise(c), stale, nil\n}","approx":false},"loadHistory()":{"sig":"func (s *Store) loadHistory() {","code":"func (s *Store) loadHistory() {\n\traw, err := os.ReadFile(s.historyPath())\n\tif err != nil {\n\t\ts.builds = []Build{}\n\t\treturn\n\t}\n\tvar h history\n\tif err := json.Unmarshal(bytes.TrimPrefix(raw, []byte(\"\\xef\\xbb\\xbf\")), &h); err != nil {\n\t\t// Starting empty would overwrite the unreadable file on the next\n\t\t// build, so keep a copy of it first.\n\t\tname := fmt.Sprintf(\"history-loi-%s.json\", time.Now().Format(\"20060102-150405\"))\n\t\t_ = os.WriteFile(filepath.Join(s.root, \"versions\", name), raw, 0o644)\n\t\ts.builds = []Build{}\n\t\treturn\n\t}\n\tfor i := range h.Builds {\n\t\t// A build left \"running\" by a crash or a quit is not running now.\n\t\tif h.Builds[i].Status == \"running\" {\n\t\t\th.Builds[i].Status = \"canceled\"\n\t\t\th.Builds[i].Err = \"ứng dụng đã thoát khi build đang chạy\"\n\t\t}\n\t}\n\ts.builds = h.Builds\n}","approx":false},"api.routes()":{"sig":"func (a *api) routes(mux *http.ServeMux) {","code":"func (a *api) routes(mux *http.ServeMux) {\n\tmux.HandleFunc(\"GET /api/state\", a.state)\n\tmux.HandleFunc(\"PUT /api/config\", a.saveConfig)\n\tmux.HandleFunc(\"GET /api/config/versions\", a.listVersions)\n\tmux.HandleFunc(\"GET /api/config/versions/{file}\", a.readVersion)\n\tmux.HandleFunc(\"POST /api/config/versions/{file}/restore\", a.restoreVersion)\n\tmux.HandleFunc(\"POST /api/pick-folder\", a.pickFolder)\n\tmux.HandleFunc(\"GET /api/inspect-folder\", a.inspectFolder)\n\tmux.HandleFunc(\"GET /api/scan-folder\", a.scanFolder)\n\tmux.HandleFunc(\"GET /api/images\", a.listImages)\n\tmux.HandleFunc(\"POST /api/images/import\", a.importImages)\n\tmux.HandleFunc(\"POST /api/build\", a.startBuild)\n\tmux.HandleFunc(\"GET /api/build/{id}/log\", a.buildLog)\n\tmux.HandleFunc(\"POST /api/build/{id}/push\", a.pushBuild)\n\tmux.HandleFunc(\"POST /api/build/{id}/promote\", a.promoteBuild)\n\tmux.HandleFunc(\"POST /api/build/{id}/cancel\", a.cancelBuild)\n\tmux.HandleFunc(\"DELETE /api/build/{id}\", a.deleteBuild)\n}","approx":false},"guard()":{"sig":"func guard(next http.Handler) http.Handler {","code":"// guard blocks requests whose Host header is not loopback, which stops a\n// malicious page from reaching this server through DNS rebinding.\nfunc guard(next http.Handler) http.Handler {\n\treturn http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\thost, _, err := net.SplitHostPort(r.Host)\n\t\tif err != nil {\n\t\t\thost = r.Host\n\t\t}\n\t\tif host != \"127.0.0.1\" && host != \"localhost\" && host != \"::1\" {\n\t\t\thttp.Error(w, \"chỉ truy cập được qua localhost\", http.StatusForbidden)\n\t\t\treturn\n\t\t}\n\t\tnext.ServeHTTP(w, r)\n\t})\n}","approx":false},"show()":{"sig":"func show(url, profile string, asTab bool, store *Store) {","code":"// show opens the interface, as its own window when it can. A store means we\n// own this server, so closing the window should stop it.\nfunc show(url, profile string, asTab bool, store *Store) {\n\tif !asTab {\n\t\tif cmd := openAppWindow(url, profile); cmd != nil {\n\t\t\tif store != nil {\n\t\t\t\tgo watchWindow(cmd, store)\n\t\t\t}\n\t\t\treturn\n\t\t}\n\t}\n\topenBrowser(url)\n}","approx":false},"openAppWindow()":{"sig":"func openAppWindow(url, profileDir string) *exec.Cmd {","code":"// openAppWindow opens the UI as its own window using a Chromium browser's\n// app mode: no address bar, no tab strip, its own taskbar entry and icon.\n// That is as close to a native window as this app can get while staying a\n// single static binary with no CGO and no runtime to install.\n//\n// It returns the browser process, or nil when no such browser was found.\nfunc openAppWindow(url, profileDir string) *exec.Cmd {\n\t// A private profile directory keeps this window out of the user's normal\n\t// browsing session. It also means a second launch of DIMA reuses this\n\t// same profile, so the browser raises the existing window instead of\n\t// opening a second one.\n\targs := []string{\n\t\t\"--app=\" + url,\n\t\t\"--user-data-dir=\" + profileDir,\n\t\t\"--window-size=1280,860\",\n\t\t\"--no-first-run\",\n\t\t\"--no-default-browser-check\",\n\t\t\"--disable-background-networking\",\n\t}\n\tfor _, bin := range chromiumCandidates() {\n\t\tcmd := exec.Command(bin, args...)\n\t\thideWindow(cmd)\n\t\tif err := cmd.Start(); err != nil {\n\t\t\tcontinue\n\t\t}\n\t\treturn cmd\n\t}\n\treturn nil\n}","approx":false},"srv.Serve()":{"sig":"","code":"\t\t\tshow(url, profile, *asTab, store)\n\t\t}()\n\t}\n\n\tsrv := &http.Server{Handler: guard(mux)}\n\tif err := srv.Serve(ln); err != nil {\n\t\tlog.Fatal(err)\n\t}\n}","approx":true},"return":{"sig":"return","code":"\tif !*noOpen {\n\t\tshow(running, profile, *asTab, nil)\n\t}\n\treturn\n}\nif ln == nil {\n\tfatal(\"Không mở được cổng\", fmt.Sprintf(\n\t\t\"Cổng %d đang bị một chương trình khác chiếm.\\n\\nBỏ cờ -port để DIMA tự chọn cổng trống.\", *port))\n}","approx":true},"watchWindow()":{"sig":"func watchWindow(cmd *exec.Cmd, store *Store) {","code":"// watchWindow shuts the app down when its window is closed, the way a\n// desktop application behaves — which also frees the port.\nfunc watchWindow(cmd *exec.Cmd, store *Store) {\n\tstarted := time.Now()\n\t_ = cmd.Wait()\n\n\t// Some browsers hand the request to another process and exit at once.\n\t// Treat an immediate return as \"that was not our window\" and keep the\n\t// server up rather than quitting in the user's face.\n\tif time.Since(started) < 3*time.Second {\n\t\treturn\n\t}\n\tif store.HasRunningBuild() {\n\t\tfmt.Println(\"\\nCửa sổ đã đóng nhưng còn build đang chạy, nên ứng dụng vẫn tiếp tục.\")\n\t\tfmt.Println(\"Ctrl+C để dừng hẳn.\")\n\t\treturn\n\t}\n\tfmt.Println(\"\\nCửa sổ đã đóng. Dừng ứng dụng.\")\n\tos.Exit(0)\n}","approx":false},"cmd.Wait()":{"sig":"_ = cmd.Wait()","code":"// desktop application behaves — which also frees the port.\nfunc watchWindow(cmd *exec.Cmd, store *Store) {\n\tstarted := time.Now()\n\t_ = cmd.Wait()\n\n\t// Some browsers hand the request to another process and exit at once.\n\t// Treat an immediate return as \"that was not our window\" and keep the\n\t// server up rather than quitting in the user's face.\n\tif time.Since(started) < 3*time.Second {","approx":true},"< 3 giây?":{"sig":"return","code":"// Treat an immediate return as \"that was not our window\" and keep the\n// server up rather than quitting in the user's face.\nif time.Since(started) < 3*time.Second {\n\treturn\n}\nif store.HasRunningBuild() {\n\tfmt.Println(\"\\nCửa sổ đã đóng nhưng còn build đang chạy, nên ứng dụng vẫn tiếp tục.\")\n\tfmt.Println(\"Ctrl+C để dừng hẳn.\")\n\treturn","approx":true},"HasRunningBuild()":{"sig":"func (s *Store) HasRunningBuild() bool {","code":"// HasRunningBuild reports whether any build or promote is still in flight.\nfunc (s *Store) HasRunningBuild() bool {\n\ts.mu.RLock()\n\tdefer s.mu.RUnlock()\n\tfor _, b := range s.builds {\n\t\tif b.Status == \"running\" {\n\t\t\treturn true\n\t\t}\n\t}\n\treturn false\n}","approx":false},"os.Exit(0)":{"sig":"}","code":"\t}\n\tfmt.Println(\"\\nCửa sổ đã đóng. Dừng ứng dụng.\")\n\tos.Exit(0)\n}\n\n// chromiumCandidates lists the browsers that support app mode, best first.\nfunc chromiumCandidates() []string {\n\tswitch runtime.GOOS {\n\tcase \"windows\":","approx":true},"refresh()":{"sig":"async function refresh(){","code":"/* ---------- data ---------- */\nasync function refresh(){\n  const s = await api('/api/state');\n  state.config = s.config || {projects:[]};\n  state.builds = s.builds || [];\n  state.buildxOk = !!s.buildxOk;\n  $('#pulse').className = 'pulse' + (s.dockerOk ? ' on' : '');\n  $('#daemon').textContent = s.dockerOk ? 'docker '+s.dockerVersion : 'không thấy docker daemon';\n\n  // Keep the selection pointing at something that still exists.\n  if (state.sel.kind === 'project' && !findProject(state.sel.id)) state.sel = {kind:'overview'};\n  if (state.sel.kind === 'env' && !findEnv(state.sel.id)) state.sel = {kind:'overview'};\n  render();\n}","approx":false},"api()":{"sig":"async function api(path, opts={}){","code":"async function api(path, opts={}){\n  const res = await fetch(path, {headers:{'Content-Type':'application/json'}, ...opts});\n  if (res.status === 204) return null;\n  const data = await res.json().catch(() => ({}));\n  if (!res.ok) throw new Error(data.error || ('HTTP '+res.status));\n  return data;\n}","approx":false},"api.state()":{"sig":"func (a *api) state(w http.ResponseWriter, r *http.Request) {","code":"func (a *api) state(w http.ResponseWriter, r *http.Request) {\n\tversion, ok := a.store.DockerVersion()\n\twriteJSON(w, http.StatusOK, map[string]any{\n\t\t\"config\":        a.store.Config(),\n\t\t\"builds\":        a.store.Builds(),\n\t\t\"dockerOk\":      ok,\n\t\t\"dockerVersion\": version,\n\t\t\"buildxOk\":      a.store.BuildxOK(),\n\t\t\"appVersion\":    appVersion,\n\t})\n}","approx":false},"Store.Config()":{"sig":"func (s *Store) Config() Config {","code":"func (s *Store) Config() Config {\n\ts.mu.RLock()\n\tdefer s.mu.RUnlock()\n\treturn s.config\n}","approx":false},"Store.Builds()":{"sig":"func (s *Store) Builds() []Build {","code":"// Builds returns the history newest first.\nfunc (s *Store) Builds() []Build {\n\ts.mu.RLock()\n\tdefer s.mu.RUnlock()\n\tout := make([]Build, len(s.builds))\n\tcopy(out, s.builds)\n\tsort.Slice(out, func(i, j int) bool { return out[i].StartedAt.After(out[j].StartedAt) })\n\treturn out\n}","approx":false},"DockerVersion()":{"sig":"func (s *Store) DockerVersion() (string, bool) {","code":"// DockerVersion reports whether the docker CLI is reachable.\n//\n// The UI polls the state endpoint every few seconds, so the answer is cached\n// briefly: asking docker each time meant spawning a process per poll, per\n// open window, for a value that almost never changes.\nfunc (s *Store) DockerVersion() (string, bool) {\n\tconst freshFor = 10 * time.Second\n\n\ts.mu.RLock()\n\tif time.Since(s.dockerCheckedAt) < freshFor {\n\t\tv, ok := s.dockerVersion, s.dockerOK\n\t\ts.mu.RUnlock()\n\t\treturn v, ok\n\t}\n\ts.mu.RUnlock()\n\n\tctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)\n\tdefer cancel()\n\tcmd := exec.CommandContext(ctx, s.Config().DockerBin, \"version\", \"--format\", \"{{.Server.Version}}\")\n\thideWindow(cmd)\n\tout, err := cmd.Output()\n\n\tv := \"\"\n\tif err == nil {\n\t\tv = strings.TrimSpace(string(out))\n\t}\n\n\ts.mu.Lock()\n\ts.dockerVersion, s.dockerOK, s.dockerCheckedAt = v, v != \"\", time.Now()\n\ts.mu.Unlock()\n\treturn v, v != \"\"\n}","approx":false},"BuildxOK()":{"sig":"func (s *Store) BuildxOK() bool { return s.buildxAvailable() }","code":"// BuildxOK reports whether promotes can skip the pull/push round trip.\nfunc (s *Store) BuildxOK() bool { return s.buildxAvailable() }","approx":false},"writeJSON()":{"sig":"func writeJSON(w http.ResponseWriter, code int, v any) {","code":"func writeJSON(w http.ResponseWriter, code int, v any) {\n\tw.Header().Set(\"Content-Type\", \"application/json; charset=utf-8\")\n\tw.WriteHeader(code)\n\t_ = json.NewEncoder(w).Encode(v)\n}","approx":false},"render()":{"sig":"function render(){ renderRail(); renderPane(); }","code":"/* ---------- render ---------- */\nfunction render(){ renderRail(); renderPane(); }","approx":false},"renderPane()":{"sig":"function renderPane(){","code":"function renderPane(){\n  const sel = state.sel;\n  if (sel.kind === 'project'){ const p = findProject(sel.id); if (p) return renderProject(p); }\n  if (sel.kind === 'env'){ const hit = findEnv(sel.id); if (hit) return renderEnv(hit.p, hit.e); }\n  renderOverview();\n}","approx":false},"projectDialog()":{"sig":"function projectDialog(p){","code":"/* ---------- project settings ---------- */\nfunction projectDialog(p){\n  const draft = JSON.parse(JSON.stringify(p));\n  draft.buildArgs = draft.buildArgs || [];\n  draft.labels = draft.labels || [];\n  const envs = draft.envs || [];\n\n  const m = openModal(`\n    <h2>Cài đặt dự án ${esc(p.name)}</h2>\n    <p class=\"sub\">Giá trị ở đây áp cho mọi môi trường của dự án. Môi trường nào khai riêng thì giá trị của nó thắng.</p>\n    <div class=\"grid2\">\n      <label class=\"f\"><span>Tên dự án</span><input type=\"text\" id=\"f-name\" value=\"${esc(draft.name)}\"></label>\n      <label class=\"f\"><span>Nhóm — để trống thì nằm ngoài nhóm</span>\n        <input type=\"text\" id=\"f-group\" list=\"groups\" value=\"${esc(draft.group||'')}\" placeholder=\"ví dụ: khách hàng A\">\n        <datalist id=\"groups\">${groupNames().map(g => `<option value=\"${esc(g)}\">`).join('')}</datalist>\n      </label>\n    </div>\n    <div class=\"grid2\">\n      <label class=\"f\"><span>Cách đưa version qua các môi trường</span>\n        <select id=\"f-mode\">\n          <option value=\"rebuild\" ${draft.releaseMode!=='promote'?'selected':''}>Build lại cho từng môi trường</option>\n          <option value=\"promote\" ${draft.releaseMode==='promote'?'selected':''}>Build một lần rồi promote</option>\n        </select></label>\n    </div>\n    <label class=\"f\" id=\"src-wrap\"><span>Môi trường nguồn — nơi duy nhất được build</span>\n      <select id=\"f-src\">${envs.map(e => `<option value=\"${esc(e.id)}\" ${e.id===buildEnvId(p)?'selected':''}>${esc(e.name)}</option>`).join('')}</select>\n    </label>\n    <label class=\"f\"><span>Thư mục mã nguồn — nơi chạy lệnh docker build</span>\n      <div class=\"pathrow\">\n        <input type=\"text\" id=\"f-ctx\" value=\"${esc(draft.context||'')}\" placeholder=\"chưa chọn thư mục\">\n        <button type=\"button\" class=\"btn\" id=\"pick-ctx\">Chọn thư mục</button>\n…","approx":false},"envDialog()":{"sig":"function envDialog(p, e){","code":"/* ---------- environment settings ---------- */\nfunction envDialog(p, e){\n  const draft = JSON.parse(JSON.stringify(e));\n  draft.buildArgs = draft.buildArgs || [];\n  draft.labels = draft.labels || [];\n  const inh = v => v ? `kế thừa: ${v}` : 'để trống';\n\n  const m = openModal(`\n    <h2>Cài đặt môi trường ${esc(e.name)}</h2>\n    <p class=\"sub\">Chỉ khai những gì khác với dự án ${esc(p.name)}. Ô để trống thì lấy giá trị của dự án.</p>\n    <div class=\"grid2\">\n      <label class=\"f\"><span>Tên môi trường</span><input type=\"text\" id=\"f-name\" value=\"${esc(draft.name)}\"></label>\n      <label class=\"f\"><span>Tiền tố tag</span><input type=\"text\" id=\"f-prefix\" value=\"${esc(draft.tagPrefix||'')}\" placeholder=\"prod-\"></label>\n    </div>\n    <div class=\"preview\" id=\"preview\"></div>\n    <div class=\"section-label\" style=\"margin:22px 0 10px\">Ghi đè cấu hình của dự án</div>\n    <div class=\"grid2\">\n      <label class=\"f\"><span>Registry</span><input type=\"text\" id=\"f-reg\" value=\"${esc(draft.registry||'')}\" placeholder=\"${esc(inh(p.registry))}\"></label>\n      <label class=\"f\"><span>Tên image</span><input type=\"text\" id=\"f-img\" value=\"${esc(draft.image||'')}\" placeholder=\"${esc(inh(p.image))}\"></label>\n      <label class=\"f\"><span>Dockerfile</span><input type=\"text\" id=\"f-df\" value=\"${esc(draft.dockerfile||'')}\" placeholder=\"${esc(inh(p.dockerfile))}\"></label>\n      <label class=\"f\"><span>Platform</span><input type=\"text\" id=\"f-plat\" value=\"${esc(draft.platform||'')}\" placeholder=\"${esc(inh(p.platform))}\"></label>\n      <label class=\"f\"><span>Target stage</span><input type=\"text\" id=\"f-target\" value=\"${esc(draft.target||'')}\" placeholder=\"${esc(inh(p.target))}\"></label>\n    </div>\n    <label class=\"f\"><span>Thư mục mã nguồn riêng — để trống thì dùng của dự án</span>\n      <div class=\"pathrow\">\n        <input type=\"text\" id=\"f-ctx\" value=\"${esc(draft.context||'')}\" placeholder=\"${esc(inh(p.context))}\">\n        <button type=\"button\" class=\"btn\" id=\"pick-ctx\">Chọn thư mục</button>\n      </div>\n    </label>\n    <div class=\"pathinfo none\" id=\"info-ctx\"></div>\n    <label class=\"f\"><span>Cờ thêm — nối vào cờ của dự án</span>\n…","approx":false},"cloneConfig()":{"sig":"const cloneConfig = () => JSON.parse(JSON.stringify(state.config));","code":"const cloneConfig = () => JSON.parse(JSON.stringify(state.config));\n\n/* ---------- render ---------- */\nfunction render(){ renderRail(); renderPane(); }","approx":false},"saveConfig()":{"sig":"async function saveConfig(next, okMsg){","code":"async function saveConfig(next, okMsg){\n  const saved = await api('/api/config', {method:'PUT', body:JSON.stringify(next)});\n  state.config = saved;\n  if (okMsg) toast(okMsg);\n  await refresh();\n  return saved;\n}","approx":false},"api.saveConfig()":{"sig":"func (a *api) saveConfig(w http.ResponseWriter, r *http.Request) {","code":"func (a *api) saveConfig(w http.ResponseWriter, r *http.Request) {\n\tvar c Config\n\tif err := json.NewDecoder(r.Body).Decode(&c); err != nil {\n\t\tfail(w, http.StatusBadRequest, \"JSON không hợp lệ: \"+err.Error())\n\t\treturn\n\t}\n\tfor _, p := range c.Projects {\n\t\tif strings.TrimSpace(p.Name) == \"\" {\n\t\t\tfail(w, http.StatusBadRequest, \"mỗi dự án phải có tên\")\n\t\t\treturn\n\t\t}\n\t\tfor _, e := range p.Envs {\n\t\t\tif strings.TrimSpace(e.Name) == \"\" {\n\t\t\t\tfail(w, http.StatusBadRequest, \"môi trường trong dự án \"+p.Name+\" chưa có tên\")\n\t\t\t\treturn\n\t\t\t}\n\t\t\t// The image may be set on either level; what matters is the\n\t\t\t// value the environment ends up with.\n\t\t\tif strings.TrimSpace(p.Effective(e).Image) == \"\" {\n\t\t\t\tfail(w, http.StatusBadRequest, \"môi trường \"+e.Name+\" chưa có tên image — khai ở dự án hoặc ở chính môi trường\")\n\t\t\t\treturn\n\t\t\t}\n\t\t\tif strings.ContainsAny(e.TagPrefix, badTagChars) {\n\t\t\t\tfail(w, http.StatusBadRequest, \"tiền tố tag của \"+e.Name+\" không được chứa khoảng trắng hoặc dấu : / \\\\\")\n\t\t\t\treturn\n\t\t\t}\n\t\t\t// Deliberately NOT checked here: whether the build context\n\t\t\t// exists on disk. Saving rewrites the whole file, so refusing it\n\t\t\t// over one bad folder blocks every unrelated edit — including\n\t\t\t// deleting the very project that is broken. A folder can also\n…","approx":false},"Project.Effective()":{"sig":"func (p Project) Effective(e Env) Env {","code":"// Effective resolves an environment against its project. Every consumer\n// (the builder, the API, the pull command) works with the result, never\n// with the raw Env.\nfunc (p Project) Effective(e Env) Env {\n\tout := e\n\tout.Registry = firstNonEmpty(e.Registry, p.Registry)\n\tout.Image = firstNonEmpty(e.Image, p.Image)\n\tout.Context = firstNonEmpty(e.Context, p.Context)\n\tout.Dockerfile = firstNonEmpty(e.Dockerfile, p.Dockerfile)\n\tout.Platform = firstNonEmpty(e.Platform, p.Platform)\n\tout.Target = firstNonEmpty(e.Target, p.Target)\n\tout.BuildArgs = mergeKV(p.BuildArgs, e.BuildArgs)\n\tout.Labels = mergeKV(p.Labels, e.Labels)\n\t// Flags are additive by nature, so the environment's are appended to the\n\t// project's rather than replacing them.\n\tout.ExtraFlags = strings.TrimSpace(strings.TrimSpace(p.ExtraFlags) + \" \" + strings.TrimSpace(e.ExtraFlags))\n\treturn out\n}","approx":false},"Store.SaveConfig()":{"sig":"func (s *Store) SaveConfig(c Config) error {","code":"// SaveConfig snapshots the current file before overwriting it, so every\n// settings change is recoverable from the Versions list.\nfunc (s *Store) SaveConfig(c Config) error {\n\ts.mu.Lock()\n\tdefer s.mu.Unlock()\n\ts.snapshotConfigLocked()\n\tc = normalise(c)\n\tif err := s.writeConfigFile(c); err != nil {\n\t\treturn err\n\t}\n\ts.config = c\n\treturn nil\n}","approx":false},"snapshotConfigLocked()":{"sig":"func (s *Store) snapshotConfigLocked() {","code":"// snapshotConfigLocked copies the config file as it is on disk into the\n// versions folder. Callers hold the lock, or run before the store is shared.\nfunc (s *Store) snapshotConfigLocked() {\n\told, err := os.ReadFile(s.configPath())\n\tif err != nil {\n\t\treturn\n\t}\n\tname := fmt.Sprintf(\"config-%s.json\", time.Now().Format(\"20060102-150405\"))\n\t_ = os.WriteFile(filepath.Join(s.root, \"versions\", name), old, 0o644)\n}","approx":false},"normalise()":{"sig":"func normalise(c Config) Config {","code":"// normalise fills in the defaults and identifiers a hand-edited or restored\n// config.json may be missing.\nfunc normalise(c Config) Config {\n\tif strings.TrimSpace(c.DockerBin) == \"\" {\n\t\tc.DockerBin = \"docker\"\n\t}\n\tc.SchemaVersion = currentSchema\n\tfor i := range c.Projects {\n\t\tp := &c.Projects[i]\n\t\tif p.ID == \"\" {\n\t\t\tp.ID = newID()\n\t\t}\n\t\tp.Group = strings.TrimSpace(p.Group)\n\t\tif p.ReleaseMode != ModePromote {\n\t\t\tp.ReleaseMode = ModeRebuild\n\t\t}\n\t\tif p.BuildArgs == nil {\n\t\t\tp.BuildArgs = []KV{}\n\t\t}\n\t\tif p.Labels == nil {\n\t\t\tp.Labels = []KV{}\n\t\t}\n\t\tif p.Envs == nil {\n\t\t\tp.Envs = []Env{}\n\t\t}\n\t\tfor j := range p.Envs {\n\t\t\te := &p.Envs[j]\n\t\t\tif e.ID == \"\" {\n\t\t\t\te.ID = newID()\n\t\t\t}\n\t\t\tif e.LastVersion == \"\" && e.LastTag != \"\" {\n\t\t\t\te.LastVersion = e.LastTag\n…","approx":false},"writeConfigFile()":{"sig":"func (s *Store) writeConfigFile(c Config) error {","code":"func (s *Store) writeConfigFile(c Config) error {\n\traw, err := json.MarshalIndent(c, \"\", \"  \")\n\tif err != nil {\n\t\treturn err\n\t}\n\treturn os.WriteFile(s.configPath(), append(raw, '\\n'), 0o644)\n}","approx":false},"mountPath()":{"sig":"function mountPath(input, btn, infoEl, wantedDockerfile, inheritedPath, onPick){","code":"function mountPath(input, btn, infoEl, wantedDockerfile, inheritedPath, onPick){\n  let timer;\n\n  const render = info => {\n    const inherited = !input.value.trim() && info.path;\n    if (!info.path){\n      infoEl.className = 'pathinfo none';\n      infoEl.textContent = 'Chưa chọn thư mục — build sẽ không chạy được.';\n      return;\n    }\n    const prefix = inherited ? 'Kế thừa ' + info.path + ' — ' : '';\n    if (!info.exists){\n      infoEl.className = 'pathinfo bad';\n      infoEl.textContent = prefix + 'không tìm thấy thư mục này.';\n      return;\n    }\n    if (!info.isDir){\n      infoEl.className = 'pathinfo bad';\n      infoEl.textContent = prefix + 'đây là một file, không phải thư mục.';\n      return;\n    }\n    if (info.hasWanted){\n      infoEl.className = 'pathinfo ok';\n      infoEl.textContent = prefix + 'đã thấy ' + info.wanted + ' trong thư mục này.';\n      return;\n    }\n    infoEl.className = 'pathinfo bad';\n    infoEl.textContent = prefix + (info.dockerfiles.length\n      ? 'không thấy ' + info.wanted + '. Thư mục này đang có: ' + info.dockerfiles.join(', ')\n      : 'không thấy Dockerfile nào trong thư mục này.');\n…","approx":false},"POST /api/pick-folder":{"sig":"const picked = await api('/api/pick-folder', {method:'POST'});","code":"const label = btn.textContent;\nbtn.textContent = 'Đang mở…';\ntry {\n  const picked = await api('/api/pick-folder', {method:'POST'});\n  if (picked.path){\n    input.value = picked.path;\n    if (onPick) onPick(picked.path);\n  }\n  await check();","approx":true},"api.pickFolder()":{"sig":"func (a *api) pickFolder(w http.ResponseWriter, r *http.Request) {","code":"// pickFolder opens the desktop's own folder chooser. The UI runs in a\n// browser, which is not allowed to know real paths, so the dialog has to be\n// opened by this process and the chosen path handed back.\nfunc (a *api) pickFolder(w http.ResponseWriter, r *http.Request) {\n\tpath, err := pickFolder(\"Chọn thư mục mã nguồn của dự án\")\n\tif err != nil {\n\t\tfail(w, http.StatusInternalServerError, err.Error())\n\t\treturn\n\t}\n\twriteJSON(w, http.StatusOK, inspectFolder(path, \"\"))\n}","approx":false},"pickFolder()":{"sig":"func pickFolder(title string) (string, error) {","code":"// The dialog is opened by powershell.exe instead of by calling shell32 from\n// this process. Doing it by hand worked, but it made the unsigned binary\n// look suspicious to Smart App Control, which then refused to run DIMA at\n// all — an app that will not start is worse than a dialog that takes an\n// extra second to appear. powershell.exe ships signed by Microsoft, so this\n// route is allowed. Its console window is suppressed by hideWindow.\nfunc pickFolder(title string) (string, error) {\n\tscript := `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\nAdd-Type -AssemblyName System.Windows.Forms\n$d = New-Object System.Windows.Forms.FolderBrowserDialog\n$d.Description = '` + strings.ReplaceAll(title, \"'\", \"\") + `'\n$d.ShowNewFolderButton = $true\n$d.RootFolder = [Environment+SpecialFolder]::MyComputer\nif ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.SelectedPath) }`\n\n\tcmd := exec.Command(\"powershell.exe\", \"-NoProfile\", \"-STA\", \"-Command\", script)\n\thideWindow(cmd)\n\tout, err := cmd.Output()\n\tif err != nil {\n\t\treturn \"\", fmt.Errorf(\"không mở được hộp thoại chọn thư mục: %w\", err)\n\t}\n\treturn strings.TrimSpace(string(out)), nil\n}","approx":false},"inspectFolder()":{"sig":"func inspectFolder(path, dockerfile string) folderInfo {","code":"func inspectFolder(path, dockerfile string) folderInfo {\n\tinfo := folderInfo{Path: path, Wanted: dockerfileOr(dockerfile), Dockerfiles: []string{}}\n\tif strings.TrimSpace(path) == \"\" {\n\t\treturn info\n\t}\n\tst, err := os.Stat(path)\n\tif err != nil {\n\t\treturn info\n\t}\n\tinfo.Exists = true\n\tinfo.IsDir = st.IsDir()\n\tif !info.IsDir {\n\t\treturn info\n\t}\n\tentries, err := os.ReadDir(path)\n\tif err != nil {\n\t\treturn info\n\t}\n\tfor _, e := range entries {\n\t\tif e.IsDir() {\n\t\t\tcontinue\n\t\t}\n\t\tif n := e.Name(); n == \"Dockerfile\" || strings.HasPrefix(n, \"Dockerfile.\") ||\n\t\t\tstrings.HasSuffix(strings.ToLower(n), \".dockerfile\") {\n\t\t\tinfo.Dockerfiles = append(info.Dockerfiles, n)\n\t\t}\n\t}\n\t// The configured Dockerfile may sit in a subfolder, so check the path\n\t// rather than only the listing above.\n\tif _, err := os.Stat(filepath.Join(path, info.Wanted)); err == nil {\n…","approx":false},"render(info)":{"sig":"const render = info => {","code":"const render = info => {\n  const inherited = !input.value.trim() && info.path;\n  if (!info.path){\n    infoEl.className = 'pathinfo none';\n    infoEl.textContent = 'Chưa chọn thư mục — build sẽ không chạy được.';\n    return;\n  }\n  const prefix = inherited ? 'Kế thừa ' + info.path + ' — ' : '';\n  if (!info.exists){\n    infoEl.className = 'pathinfo bad';\n    infoEl.textContent = prefix + 'không tìm thấy thư mục này.';\n    return;\n  }\n  if (!info.isDir){\n    infoEl.className = 'pathinfo bad';\n    infoEl.textContent = prefix + 'đây là một file, không phải thư mục.';\n    return;\n  }\n  if (info.hasWanted){\n    infoEl.className = 'pathinfo ok';\n    infoEl.textContent = prefix + 'đã thấy ' + info.wanted + ' trong thư mục này.';\n    return;\n  }\n  infoEl.className = 'pathinfo bad';\n  infoEl.textContent = prefix + (info.dockerfiles.length\n    ? 'không thấy ' + info.wanted + '. Thư mục này đang có: ' + info.dockerfiles.join(', ')\n    : 'không thấy Dockerfile nào trong thư mục này.');\n};","approx":false},"importDialog()":{"sig":"function importDialog(){","code":"/* ---------- bulk import ---------- */\nfunction importDialog(){\n  const m = openModal(`\n    <h2>Quét thư mục mã nguồn</h2>\n    <p class=\"sub\">Chọn một thư mục cha. DIMA tìm các thư mục con có Dockerfile (sâu tối đa ba tầng) và tạo mỗi thư mục một dự án.</p>\n    <label class=\"f\"><span>Thư mục cha</span>\n      <div class=\"pathrow\">\n        <input type=\"text\" id=\"root\" placeholder=\"ví dụ: D:\\\\work\">\n        <button type=\"button\" class=\"btn\" id=\"pick\">Chọn thư mục</button>\n      </div>\n    </label>\n    <div class=\"grid2\">\n      <label class=\"f\"><span>Nhóm cho tất cả</span><input type=\"text\" id=\"group\" list=\"groups2\" placeholder=\"lấy theo tên thư mục cha\">\n        <datalist id=\"groups2\">${groupNames().map(g => `<option value=\"${esc(g)}\">`).join('')}</datalist></label>\n      <label class=\"f\"><span>Registry cho tất cả — để trống nếu build local</span><input type=\"text\" id=\"reg\" placeholder=\"git.mmt.local\"></label>\n    </div>\n    <div class=\"section-label\" style=\"margin:16px 0 8px\">Tìm thấy <span class=\"count\" id=\"count\">—</span>\n      <button class=\"btn sm ghost\" id=\"all\" style=\"margin-left:auto\">Chọn tất cả</button>\n      <button class=\"btn sm ghost\" id=\"none\">Bỏ chọn</button>\n    </div>\n    <div id=\"hits\"><div class=\"kv-empty\">Chọn thư mục cha để bắt đầu.</div></div>\n    <div class=\"modal-foot\">\n      <button class=\"btn\" id=\"cancel\">Hủy</button>\n      <button class=\"btn primary\" id=\"go\" disabled>Thêm</button>\n    </div>`, true);\n\n  const rootIn = $('#root', m), groupIn = $('#group', m);\n  let hits = [];\n  const taken = new Set(projects().flatMap(p => (p.envs||[]).map(e => (effective(p,e).context||'').toLowerCase()).concat([(p.context||'').toLowerCase()])).filter(Boolean));\n\n  const selected = () => $$('#hits input:checked', m).map(c => hits[+c.dataset.i]);\n…","approx":false},"scan()":{"sig":"const scan = async () => {","code":"const scan = async () => {\n  const path = rootIn.value.trim();\n  if (!path) return;\n  $('#hits', m).innerHTML = `<div class=\"kv-empty\">Đang quét ${esc(path)}…</div>`;\n  try {\n    const res = await api('/api/scan-folder?path=' + encodeURIComponent(path));\n    hits = res.hits || [];\n    if (!groupIn.value.trim()) groupIn.value = res.group || '';\n    drawHits();\n    if (res.truncated) toast('Quá nhiều thư mục, chỉ hiện ' + hits.length + ' cái đầu tiên', true);\n  } catch (e) {\n    hits = [];\n    $('#hits', m).innerHTML = `<div class=\"kv-empty\">${esc(e.message)}</div>`;\n    syncGo();\n  }\n};","approx":false},"api.scanFolder()":{"sig":"func (a *api) scanFolder(w http.ResponseWriter, r *http.Request) {","code":"// tree of repositories can be added in one go instead of one at a time.\n//\n// It looks three levels down, which covers a flat folder of repositories,\n// the common apps/<name> layout, and one grouping folder above either of\n// them. Descending stops as soon as a folder turns out to be buildable, so\n// a repository's own subfolders are never mistaken for separate projects.\nfunc (a *api) scanFolder(w http.ResponseWriter, r *http.Request) {\n\troot := strings.TrimSpace(r.URL.Query().Get(\"path\"))\n\tif root == \"\" {\n\t\tfail(w, http.StatusBadRequest, \"chưa chọn thư mục để quét\")\n\t\treturn\n\t}\n\tst, err := os.Stat(root)\n\tif err != nil || !st.IsDir() {\n\t\tfail(w, http.StatusBadRequest, \"không tìm thấy thư mục: \"+root)\n\t\treturn\n\t}\n\n\thits := []scanHit{}\n\t// The parent folder may itself be a project.\n\tif df := dockerfileIn(root); df != \"\" {\n\t\thits = append(hits, scanHit{Name: filepath.Base(root), Path: root, Dockerfile: df, Depth: 0})\n\t}\n\tvar walk func(dir string, depth int)\n\twalk = func(dir string, depth int) {\n\t\tif depth > 3 || len(hits) >= maxScanHits {\n\t\t\treturn\n\t\t}\n\t\tentries, err := os.ReadDir(dir)\n\t\tif err != nil {\n\t\t\treturn\n\t\t}\n\t\tfor _, e := range entries {\n\t\t\tif !e.IsDir() || len(hits) >= maxScanHits || skipDir(e.Name()) {\n\t\t\t\tcontinue\n\t\t\t}\n…","approx":false},"skipDir()":{"sig":"func skipDir(name string) bool {","code":"// skipDir keeps the scan out of folders that never hold a project of their own.\nfunc skipDir(name string) bool {\n\tswitch name {\n\tcase \"node_modules\", \"vendor\", \"dist\", \"build\", \"target\", \"bin\", \"obj\",\n\t\t\".git\", \".idea\", \".vscode\", \".venv\", \"venv\", \"__pycache__\":\n\t\treturn true\n\t}\n\treturn strings.HasPrefix(name, \".\")\n}","approx":false},"dockerfileIn()":{"sig":"func dockerfileIn(dir string) string {","code":"// dockerfileIn returns the Dockerfile to use for a folder, or \"\".\nfunc dockerfileIn(dir string) string {\n\tif _, err := os.Stat(filepath.Join(dir, \"Dockerfile\")); err == nil {\n\t\treturn \"Dockerfile\"\n\t}\n\tentries, err := os.ReadDir(dir)\n\tif err != nil {\n\t\treturn \"\"\n\t}\n\tfor _, e := range entries {\n\t\tif e.IsDir() {\n\t\t\tcontinue\n\t\t}\n\t\tif n := e.Name(); strings.HasPrefix(n, \"Dockerfile.\") ||\n\t\t\tstrings.HasSuffix(strings.ToLower(n), \".dockerfile\") {\n\t\t\treturn n\n\t\t}\n\t}\n\treturn \"\"\n}","approx":false},"drawHits()":{"sig":"const drawHits = () => {","code":"const drawHits = () => {\n  $('#count', m).textContent = hits.length;\n  if (!hits.length){\n    $('#hits', m).innerHTML = `<div class=\"kv-empty\">Không thấy thư mục con nào có Dockerfile.</div>`;\n    return syncGo();\n  }\n  const root = (rootIn.value.trim() || '').replace(/[\\\\/]+$/, '');\n  const rel = p => {\n    const s = p.startsWith(root) ? p.slice(root.length) : p;\n    return s.replace(/^[\\\\/]+/, '') || '.';\n  };\n  $('#hits', m).innerHTML = `<div class=\"builds\">` + hits.map((h, i) => {\n    const dup = taken.has(h.path.toLowerCase());\n    return `<label class=\"hit${dup ? ' dup' : ''}\">\n      <input type=\"checkbox\" data-i=\"${i}\" ${dup ? 'disabled' : 'checked'}>\n      <b class=\"hit-name\">${esc(h.name)}</b>\n      <span class=\"hit-path\" title=\"${esc(h.path)}\">${esc(rel(h.path))}</span>\n      <span class=\"badge ${dup ? '' : 'pushed'}\">${dup ? 'đã có' : esc(h.dockerfile)}</span>\n    </label>`;\n  }).join('') + `</div>`;\n  $$('#hits input', m).forEach(c => c.onchange = syncGo);\n  syncGo();\n};","approx":false},"imagesDialog()":{"sig":"function imagesDialog(){","code":"/* ---------- import from images already on this machine ---------- */\nfunction imagesDialog(){\n  const m = openModal(`\n    <h2>Quét image có sẵn</h2>\n    <p class=\"sub\">Đọc các image đang có trong Docker trên máy này và đưa chúng vào dự án.\n      Mỗi repository thành một dự án; các tag là phiên bản của nó sẽ hiện luôn trong bảng version.</p>\n    <div class=\"grid2\">\n      <label class=\"f\"><span>Nhóm cho tất cả</span>\n        <input type=\"text\" id=\"group\" list=\"groups3\" placeholder=\"để trống nếu không xếp nhóm\">\n        <datalist id=\"groups3\">${groupNames().map(g => `<option value=\"${esc(g)}\">`).join('')}</datalist></label>\n      <label class=\"f\"><span>&nbsp;</span>\n        <label class=\"check\" style=\"height:36px\"><input type=\"checkbox\" id=\"showAll\"> Hiện cả image tải về từ Docker Hub</label>\n      </label>\n    </div>\n    <div class=\"section-label\" style=\"margin:10px 0 8px\">Repository <span class=\"count\" id=\"count\">…</span>\n      <button class=\"btn sm ghost\" id=\"all\" style=\"margin-left:auto\">Chọn tất cả</button>\n      <button class=\"btn sm ghost\" id=\"none\">Bỏ chọn</button>\n    </div>\n    <div id=\"repos\"><div class=\"kv-empty\">Đang đọc danh sách image…</div></div>\n    <div class=\"modal-foot\">\n      <button class=\"btn\" id=\"cancel\">Hủy</button>\n      <button class=\"btn primary\" id=\"go\" disabled>Thêm</button>\n    </div>`, true);\n\n  let repos = [];\n  const visible = () => repos.filter(r => $('#showAll', m).checked || r.private || r.known);\n  const selected = () => $$('#repos input:checked', m).map(c => c.dataset.repo);\n\n  const syncGo = () => {\n    const n = selected().length;\n    $('#go', m).disabled = n === 0;\n…","approx":false},"Store.LocalImages()":{"sig":"func (s *Store) LocalImages() ([]LocalImage, error) {","code":"// LocalImages lists what `docker images` sees, so existing work can be\n// pulled into DIMA instead of being retyped.\n//\n// It asks for tab separated fields rather than JSON: the field names of\n// `docker images --format json` have moved between docker versions, while\n// this template has been stable for years.\nfunc (s *Store) LocalImages() ([]LocalImage, error) {\n\tctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)\n\tdefer cancel()\n\tcmd := exec.CommandContext(ctx, s.Config().DockerBin, \"images\",\n\t\t\"--format\", \"{{.Repository}}\\t{{.Tag}}\\t{{.ID}}\\t{{.Size}}\\t{{.CreatedSince}}\\t{{.CreatedAt}}\")\n\thideWindow(cmd)\n\tout, err := cmd.Output()\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"không đọc được danh sách image: %w\", err)\n\t}\n\n\tlist := []LocalImage{}\n\tfor _, line := range strings.Split(string(out), \"\\n\") {\n\t\tf := strings.Split(strings.TrimRight(line, \"\\r\"), \"\\t\")\n\t\tif len(f) < 6 || f[0] == \"\" || f[0] == \"<none>\" || f[1] == \"<none>\" {\n\t\t\tcontinue\n\t\t}\n\t\timg := LocalImage{Repository: f[0], Tag: f[1], ID: f[2], Size: f[3], Age: f[4]}\n\t\t// \"2026-09-22 15:45:38 +0700 +07\" — the trailing zone name is not\n\t\t// part of a layout Go understands, so parse the prefix only.\n\t\tif t, err := time.Parse(\"2006-01-02 15:04:05 -0700\", strings.Join(strings.Fields(f[5])[:3], \" \")); err == nil {\n\t\t\timg.CreatedAt = t\n\t\t}\n\t\tlist = append(list, img)\n\t}\n\treturn list, nil\n}","approx":false},"GroupImages()":{"sig":"func GroupImages(images []LocalImage) []ImageRepo {","code":"// GroupImages folds a flat image list into one entry per repository,\n// newest first.\nfunc GroupImages(images []LocalImage) []ImageRepo {\n\tbyRepo := map[string]*ImageRepo{}\n\torder := []string{}\n\n\tfor _, img := range images {\n\t\tr, ok := byRepo[img.Repository]\n\t\tif !ok {\n\t\t\treg, name := splitRepository(img.Repository)\n\t\t\tshort := name\n\t\t\tif i := strings.LastIndex(short, \"/\"); i >= 0 {\n\t\t\t\tshort = short[i+1:]\n\t\t\t}\n\t\t\tr = &ImageRepo{\n\t\t\t\tRepository: img.Repository, Registry: reg, Image: name,\n\t\t\t\tName: short, Private: reg != \"\", Age: img.Age,\n\t\t\t\tTags: []ImageTag{}, Prefixes: []string{},\n\t\t\t}\n\t\t\tbyRepo[img.Repository] = r\n\t\t\torder = append(order, img.Repository)\n\t\t}\n\t\tprefix, version, isVersion := classifyTag(img.Tag)\n\t\tr.Tags = append(r.Tags, ImageTag{\n\t\t\tTag: img.Tag, Prefix: prefix, Version: version, IsVersion: isVersion,\n\t\t\tID: img.ID, Size: img.Size, Age: img.Age, CreatedAt: img.CreatedAt,\n\t\t})\n\t}\n\n\tout := make([]ImageRepo, 0, len(order))\n\tfor _, name := range order {\n\t\tr := byRepo[name]\n…","approx":false},"splitRepository()":{"sig":"func splitRepository(repo string) (registry, image string) {","code":"// splitRepository separates the registry host from the image name.\n//\n// The first segment is a registry only when it looks like a host: it has a\n// dot or a port, or it is localhost. That is the same rule docker itself\n// uses, and it is why moby/buildkit is an image on Docker Hub while\n// harbor.tech/mm/app is an image on a private registry.\nfunc splitRepository(repo string) (registry, image string) {\n\tparts := strings.SplitN(repo, \"/\", 2)\n\tif len(parts) == 2 && (strings.ContainsAny(parts[0], \".:\") || parts[0] == \"localhost\") {\n\t\treturn parts[0], parts[1]\n\t}\n\treturn \"\", repo\n}","approx":false},"classifyTag()":{"sig":"func classifyTag(tag string) (prefix, version string, isVersion bool) {","code":"// classifyTag decides whether a tag names a release, and splits off the\n// environment prefix if it has one. A release has to contain a digit:\n// latest, cache, stable and local do not.\nfunc classifyTag(tag string) (prefix, version string, isVersion bool) {\n\tm := tagPattern.FindStringSubmatch(tag)\n\tif m == nil {\n\t\treturn \"\", tag, false\n\t}\n\tprefix, version = m[1], m[2]\n\tif version == \"\" {\n\t\tprefix, version = \"\", tag\n\t}\n\tif !strings.ContainsAny(version, \"0123456789\") {\n\t\treturn \"\", tag, false\n\t}\n\treturn prefix, version, true\n}","approx":false},"api.listImages()":{"sig":"func (a *api) listImages(w http.ResponseWriter, r *http.Request) {","code":"// listImages reports the repositories already on this machine, so work that\n// predates DIMA can be pulled in instead of retyped.\nfunc (a *api) listImages(w http.ResponseWriter, r *http.Request) {\n\timages, err := a.store.LocalImages()\n\tif err != nil {\n\t\tfail(w, http.StatusInternalServerError, err.Error())\n\t\treturn\n\t}\n\trepos := GroupImages(images)\n\n\t// Mark what is already covered, so the screen can grey those out rather\n\t// than let the same repository be imported twice.\n\tknown := map[string]bool{}\n\tfor _, p := range a.store.Config().Projects {\n\t\tfor _, e := range p.Envs {\n\t\t\tknown[strings.ToLower(p.Effective(e).Repo())] = true\n\t\t}\n\t}\n\ttype row struct {\n\t\tImageRepo\n\t\tKnown bool `json:\"known\"`\n\t}\n\tout := make([]row, 0, len(repos))\n\tfor _, rp := range repos {\n\t\tout = append(out, row{ImageRepo: rp, Known: known[strings.ToLower(rp.Repository)]})\n\t}\n\twriteJSON(w, http.StatusOK, map[string]any{\"repos\": out})\n}","approx":false},"draw()":{"sig":"const draw = () => {","code":"const draw = () => {\n  const list = visible();\n  $('#count', m).textContent = list.length;\n  if (!list.length){\n    $('#repos', m).innerHTML = `<div class=\"kv-empty\">Không có image nào phù hợp. Tích “Hiện cả image tải về từ Docker Hub” để xem hết.</div>`;\n    return syncGo();\n  }\n  $('#repos', m).innerHTML = `<div class=\"builds\">` + list.map(r => {\n    const versions = r.tags.filter(t => t.isVersion);\n    const detail = versions.length\n      ? versions.slice(0, 3).map(t => t.tag).join(', ') + (versions.length > 3 ? ` +${versions.length-3}` : '')\n      : 'chưa có tag nào là phiên bản';\n    const origin = r.registry || 'Docker Hub';\n    return `<label class=\"hit${r.known ? ' dup' : ''}\">\n      <input type=\"checkbox\" data-repo=\"${esc(r.repository)}\" ${r.known ? 'disabled' : (r.private ? 'checked' : '')}>\n      <b class=\"hit-name\">${esc(r.name)}</b>\n      <span class=\"hit-path\" title=\"${esc(r.repository)}\">${esc(r.repository)}</span>\n      <span class=\"row-when\">${esc(detail)}</span>\n      <span class=\"badge ${r.known ? '' : (r.private ? 'pushed' : '')}\">${r.known ? 'đã có' : esc(origin)}</span>\n    </label>`;\n  }).join('') + `</div>`;\n  $$('#repos input', m).forEach(c => c.onchange = syncGo);\n  syncGo();\n};","approx":false},"api.importImages()":{"sig":"func (a *api) importImages(w http.ResponseWriter, r *http.Request) {","code":"// importImages turns chosen repositories into projects, and records the\n// tags they already carry as history entries — without those the imported\n// project would claim to have no versions while the images sit right there\n// on the machine.\nfunc (a *api) importImages(w http.ResponseWriter, r *http.Request) {\n\tvar req struct {\n\t\tGroup        string   `json:\"group\"`\n\t\tRepositories []string `json:\"repositories\"`\n\t}\n\tif err := json.NewDecoder(r.Body).Decode(&req); err != nil {\n\t\tfail(w, http.StatusBadRequest, \"JSON không hợp lệ\")\n\t\treturn\n\t}\n\tif len(req.Repositories) == 0 {\n\t\tfail(w, http.StatusBadRequest, \"chưa chọn image nào\")\n\t\treturn\n\t}\n\n\timages, err := a.store.LocalImages()\n\tif err != nil {\n\t\tfail(w, http.StatusInternalServerError, err.Error())\n\t\treturn\n\t}\n\twanted := map[string]bool{}\n\tfor _, name := range req.Repositories {\n\t\twanted[name] = true\n\t}\n\n\tcfg := a.store.Config()\n\tadded, recorded := 0, 0\n\tfor _, repo := range GroupImages(images) {\n\t\tif !wanted[repo.Repository] {\n\t\t\tcontinue\n\t\t}\n…","approx":false},"ImageRepo.EnvsFor()":{"sig":"func (r ImageRepo) EnvsFor() []Env {","code":"// EnvsFor proposes the environments a repository should be imported with.\n// Tags carrying prefixes become one environment each; otherwise the project\n// gets a single environment with no prefix.\nfunc (r ImageRepo) EnvsFor() []Env {\n\tif len(r.Prefixes) == 0 {\n\t\treturn []Env{{ID: newID(), Name: \"Mặc định\", BuildArgs: []KV{}, Labels: []KV{}}}\n\t}\n\tenvs := make([]Env, 0, len(r.Prefixes))\n\tfor _, p := range r.Prefixes {\n\t\tenvs = append(envs, Env{\n\t\t\tID:        newID(),\n\t\t\tName:      envNameFor(p),\n\t\t\tTagPrefix: p,\n\t\t\tBuildArgs: []KV{}, Labels: []KV{},\n\t\t})\n\t}\n\treturn envs\n}","approx":false},"envNameFor()":{"sig":"func envNameFor(prefix string) string {","code":"// envNameFor turns a tag prefix into a readable environment name.\nfunc envNameFor(prefix string) string {\n\tname := strings.Trim(prefix, \"-_\")\n\tswitch strings.ToLower(name) {\n\tcase \"prod\", \"production\":\n\t\treturn \"Production\"\n\tcase \"stg\", \"staging\":\n\t\treturn \"Staging\"\n\tcase \"dev\", \"develop\", \"development\":\n\t\treturn \"Development\"\n\tcase \"test\", \"qa\":\n\t\treturn \"Test\"\n\tcase \"uat\":\n\t\treturn \"UAT\"\n\t}\n\tif name == \"\" {\n\t\treturn \"Mặc định\"\n\t}\n\treturn strings.ToUpper(name[:1]) + name[1:]\n}","approx":false},"recordExistingTags()":{"sig":"func (a *api) recordExistingTags(p Project, repo ImageRepo) int {","code":"// recordExistingTags writes one history entry per version tag found on the\n// machine, attributed to the environment whose prefix matches.\nfunc (a *api) recordExistingTags(p Project, repo ImageRepo) int {\n\tbyPrefix := map[string]Env{}\n\tfor _, e := range p.Envs {\n\t\tbyPrefix[e.TagPrefix] = e\n\t}\n\tn := 0\n\tfor _, t := range repo.Tags {\n\t\tif !t.IsVersion {\n\t\t\tcontinue // latest, cache and friends are not releases\n\t\t}\n\t\tenv, ok := byPrefix[t.Prefix]\n\t\tif !ok {\n\t\t\tcontinue // a stray prefix no environment claims\n\t\t}\n\t\ta.store.addBuild(Build{\n\t\t\tID:          newID(),\n\t\t\tProjectID:   p.ID,\n\t\t\tProjectName: p.Name,\n\t\t\tEnvID:       env.ID,\n\t\t\tEnvName:     env.Name,\n\t\t\tVersion:     t.Version,\n\t\t\tTag:         t.Tag,\n\t\t\tRef:         repo.Repository + \":\" + t.Tag,\n\t\t\tKind:        KindImport,\n\t\t\tStatus:      \"success\",\n\t\t\tCommand: \"đọc từ danh sách image có sẵn trên máy (\" + t.ID + \", \" +\n\t\t\t\tt.Size + \", \" + t.Age + \") — không phải do DIMA build\",\n\t\t\t// Dating the entry by when the image was actually created is what\n\t\t\t// puts the version table in the right order.\n\t\t\tStartedAt:  whenBuilt(t),\n…","approx":false},"#addProject.onclick":{"sig":"$('#addProject').onclick = async () => {","code":"$('#addProject').onclick = async () => {\n  const c = cloneConfig();\n  c.projects = c.projects || [];\n  c.projects.push({\n    id:'', name:'Dự án '+(c.projects.length+1), releaseMode:'rebuild',\n    image:'my-api', context:'', dockerfile:'Dockerfile',\n    buildArgs:[], labels:[],\n    envs:[{id:'', name:'Staging', tagPrefix:'staging-', buildArgs:[], labels:[]}],\n  });\n  try {\n    const saved = await saveConfig(c);\n    const added = saved.projects[saved.projects.length-1];\n    state.sel = {kind:'project', id:added.id};\n    render();\n    projectDialog(added);\n  } catch (e) { toast(e.message, true); }\n};","approx":false},"addEnv()":{"sig":"async function addEnv(projectId){","code":"/* ---------- create ---------- */\nasync function addEnv(projectId){\n  const c = cloneConfig();\n  const proj = c.projects.find(p => p.id === projectId);\n  if (!proj) return;\n  proj.envs = proj.envs || [];\n  proj.envs.push({id:'', name:'Môi trường '+(proj.envs.length+1), tagPrefix:'', buildArgs:[], labels:[]});\n  try {\n    const saved = await saveConfig(c);\n    const fresh = saved.projects.find(p => p.id === projectId);\n    const added = fresh.envs[fresh.envs.length-1];\n    state.sel = {kind:'env', id:added.id};\n    render();\n    envDialog(fresh, added);\n  } catch (e) { toast(e.message, true); }\n}","approx":false},"versionsDialog()":{"sig":"async function versionsDialog(){","code":"/* ---------- config snapshots ---------- */\nasync function versionsDialog(){\n  let snaps = [];\n  try { snaps = await api('/api/config/versions'); } catch (e) { return toast(e.message, true); }\n  const m = openModal(`\n    <h2>Bản lưu của config.json</h2>\n    <p class=\"sub\">Mỗi lần lưu cài đặt, bản cũ được giữ lại ở đây.</p>\n    <div id=\"snaps\">${\n      snaps.length\n        ? snaps.map(s => `<div class=\"snap\">\n            <time>${fmt(s.savedAt)}</time>\n            <span class=\"sz\">${s.size} B</span>\n            <button class=\"btn sm\" data-view=\"${esc(s.file)}\">Xem nội dung</button>\n            <button class=\"btn sm\" data-restore=\"${esc(s.file)}\">Khôi phục</button>\n          </div>`).join('')\n        : `<div class=\"kv-empty\">Chưa có bản lưu nào. Bản đầu tiên xuất hiện sau lần lưu cài đặt kế tiếp.</div>`\n    }</div>\n    <div class=\"modal-foot\"><button class=\"btn\" id=\"cancel\">Đóng</button></div>`);\n  $('#cancel', m).onclick = closeModal;\n\n  $$('[data-view]', m).forEach(el => el.onclick = async () => {\n    const raw = await fetch('/api/config/versions/'+encodeURIComponent(el.dataset.view)).then(r => r.text());\n    const v = openModal(`<h2>${esc(el.dataset.view)}</h2>\n      <pre class=\"log\" style=\"max-height:420px\">${esc(raw)}</pre>\n      <div class=\"modal-foot\"><button class=\"btn\" id=\"back\">Đóng</button></div>`, true);\n    $('#back', v).onclick = closeModal;\n  });\n\n  $$('[data-restore]', m).forEach(el => el.onclick = async () => {\n    if (!confirm('Khôi phục cài đặt từ bản lưu này? Cấu hình hiện tại sẽ được lưu lại trước.')) return;\n    try {\n…","approx":false},"api.listVersions()":{"sig":"func (a *api) listVersions(w http.ResponseWriter, r *http.Request) {","code":"func (a *api) listVersions(w http.ResponseWriter, r *http.Request) {\n\twriteJSON(w, http.StatusOK, a.store.Snapshots())\n}","approx":false},"Store.Snapshots()":{"sig":"func (s *Store) Snapshots() []Snapshot {","code":"func (s *Store) Snapshots() []Snapshot {\n\tentries, _ := os.ReadDir(filepath.Join(s.root, \"versions\"))\n\tout := []Snapshot{}\n\tfor _, e := range entries {\n\t\t// Only config snapshots are restorable; the folder also holds the\n\t\t// history backup taken during a schema migration.\n\t\tif e.IsDir() || !strings.HasPrefix(e.Name(), \"config-\") || !strings.HasSuffix(e.Name(), \".json\") {\n\t\t\tcontinue\n\t\t}\n\t\tinfo, err := e.Info()\n\t\tif err != nil {\n\t\t\tcontinue\n\t\t}\n\t\tout = append(out, Snapshot{File: e.Name(), SavedAt: info.ModTime(), Size: info.Size()})\n\t}\n\tsort.Slice(out, func(i, j int) bool { return out[i].SavedAt.After(out[j].SavedAt) })\n\treturn out\n}","approx":false},"api.readVersion()":{"sig":"func (a *api) readVersion(w http.ResponseWriter, r *http.Request) {","code":"func (a *api) readVersion(w http.ResponseWriter, r *http.Request) {\n\traw, err := a.store.ReadSnapshot(r.PathValue(\"file\"))\n\tif err != nil {\n\t\tfail(w, http.StatusNotFound, \"không đọc được bản lưu\")\n\t\treturn\n\t}\n\tw.Header().Set(\"Content-Type\", \"application/json; charset=utf-8\")\n\t_, _ = w.Write(raw)\n}","approx":false},"api.restoreVersion()":{"sig":"func (a *api) restoreVersion(w http.ResponseWriter, r *http.Request) {","code":"func (a *api) restoreVersion(w http.ResponseWriter, r *http.Request) {\n\tc, err := a.store.RestoreSnapshot(r.PathValue(\"file\"))\n\tif err != nil {\n\t\tfail(w, http.StatusBadRequest, err.Error())\n\t\treturn\n\t}\n\twriteJSON(w, http.StatusOK, c)\n}","approx":false},"RestoreSnapshot()":{"sig":"func (s *Store) RestoreSnapshot(name string) (Config, error) {","code":"func (s *Store) RestoreSnapshot(name string) (Config, error) {\n\traw, err := s.ReadSnapshot(name)\n\tif err != nil {\n\t\treturn Config{}, err\n\t}\n\tc, _, err := decodeConfig(raw)\n\tif err != nil {\n\t\treturn Config{}, fmt.Errorf(\"bản lưu hỏng: %w\", err)\n\t}\n\tif err := s.SaveConfig(c); err != nil {\n\t\treturn Config{}, err\n\t}\n\treturn s.Config(), nil\n}","approx":false},"migrateV1()":{"sig":"func migrateV1(old legacyConfig) Config {","code":"// migrateV1 folds the old flat environment list into a single project and\n// lifts every setting the environments already agreed on, so the effective\n// configuration is unchanged but the inheritance is visible.\nfunc migrateV1(old legacyConfig) Config {\n\tp := Project{\n\t\tID: newID(), Name: \"Dự án của tôi\", ReleaseMode: ModeRebuild,\n\t\tBuildArgs: []KV{}, Labels: []KV{},\n\t\tEnvs: old.Environments,\n\t}\n\tfor i := range p.Envs {\n\t\tif p.Envs[i].ID == \"\" {\n\t\t\tp.Envs[i].ID = newID()\n\t\t}\n\t\tif p.Envs[i].LastVersion == \"\" {\n\t\t\tp.Envs[i].LastVersion = p.Envs[i].LastTag\n\t\t}\n\t\tp.Envs[i].LastTag = \"\"\n\t}\n\tliftCommon(&p)\n\treturn normalise(Config{\n\t\tSchemaVersion: currentSchema,\n\t\tDockerBin:     old.DockerBin,\n\t\tProjects:      []Project{p},\n\t})\n}","approx":false},"liftCommon()":{"sig":"func liftCommon(p *Project) {","code":"// liftCommon moves every string setting the environments all share up to\n// the project and clears it on the environments. The effective value of\n// each environment is identical afterwards.\nfunc liftCommon(p *Project) {\n\tif len(p.Envs) < 2 {\n\t\treturn\n\t}\n\tfields := []struct {\n\t\tproj func(*Project) *string\n\t\tenv  func(*Env) *string\n\t}{\n\t\t{func(p *Project) *string { return &p.Registry }, func(e *Env) *string { return &e.Registry }},\n\t\t{func(p *Project) *string { return &p.Image }, func(e *Env) *string { return &e.Image }},\n\t\t{func(p *Project) *string { return &p.Context }, func(e *Env) *string { return &e.Context }},\n\t\t{func(p *Project) *string { return &p.Dockerfile }, func(e *Env) *string { return &e.Dockerfile }},\n\t\t{func(p *Project) *string { return &p.Platform }, func(e *Env) *string { return &e.Platform }},\n\t\t{func(p *Project) *string { return &p.Target }, func(e *Env) *string { return &e.Target }},\n\t\t{func(p *Project) *string { return &p.ExtraFlags }, func(e *Env) *string { return &e.ExtraFlags }},\n\t}\n\tfor _, f := range fields {\n\t\tfirst := *f.env(&p.Envs[0])\n\t\tif strings.TrimSpace(first) == \"\" {\n\t\t\tcontinue\n\t\t}\n\t\tsame := true\n\t\tfor i := range p.Envs {\n\t\t\tif *f.env(&p.Envs[i]) != first {\n\t\t\t\tsame = false\n\t\t\t\tbreak\n\t\t\t}\n\t\t}\n\t\tif !same {\n\t\t\tcontinue\n…","approx":false},"migrateHistory()":{"sig":"func (s *Store) migrateHistory() {","code":"// migrateHistory backfills the fields added in schema 2. Old records carry\n// a tag but no version; before projects existed there were no tag prefixes,\n// so the tag is the version.\nfunc (s *Store) migrateHistory() {\n\tchanged := false\n\tfor i := range s.builds {\n\t\tb := &s.builds[i]\n\t\tif b.Kind == \"\" {\n\t\t\tb.Kind = KindBuild\n\t\t\tchanged = true\n\t\t}\n\t\tif b.Version == \"\" && b.Tag != \"\" {\n\t\t\tb.Version = b.Tag\n\t\t\tchanged = true\n\t\t}\n\t\tif b.ProjectID == \"\" {\n\t\t\tif p, _, ok := s.config.FindEnv(b.EnvID); ok {\n\t\t\t\tb.ProjectID, b.ProjectName = p.ID, p.Name\n\t\t\t\tchanged = true\n\t\t\t}\n\t\t}\n\t}\n\tif !changed {\n\t\treturn\n\t}\n\tif old, err := os.ReadFile(s.historyPath()); err == nil {\n\t\tname := fmt.Sprintf(\"history-%s.json\", time.Now().Format(\"20060102-150405\"))\n\t\t_ = os.WriteFile(filepath.Join(s.root, \"versions\", name), old, 0o644)\n\t}\n\ts.persistHistoryLocked()\n}","approx":false},"buildDialog()":{"sig":"function buildDialog(p, e, preset){","code":"function buildDialog(p, e, preset){\n  if (!canBuild(p, e.id)){\n    return toast(`${p.name} chạy kiểu promote, chỉ build được ở môi trường nguồn`, true);\n  }\n  const ev = effective(p, e);\n  const last = preset || newestVersion(p) || e.lastVersion || '';\n  const m = openModal(`\n    <h2>Build ${esc(e.name)}</h2>\n    <p class=\"sub\">Dự án ${esc(p.name)}</p>\n    <label class=\"f\"><span>Version của dự án</span>\n      <input type=\"text\" id=\"ver\" value=\"${esc(preset || '')}\" placeholder=\"${esc(last || '1.0.0')}\" autocomplete=\"off\">\n    </label>\n    <div class=\"suggest\" id=\"chips\"></div>\n    <div class=\"preview\" id=\"preview\"></div>\n    <label class=\"check\" style=\"margin-top:16px\">\n      <input type=\"checkbox\" id=\"push\" ${e.autoPush?'checked':''}> Push lên registry sau khi build xong\n    </label>\n    <div class=\"modal-foot\">\n      <button class=\"btn\" id=\"cancel\">Hủy</button>\n      <button class=\"btn primary\" id=\"go\">Bắt đầu build</button>\n    </div>`);\n\n  const ver = $('#ver', m);\n  const preview = () => {\n    const v = ver.value.trim() || last;\n    $('#preview', m).textContent = repoOf(ev) + ':' + tagOf(ev, v);\n  };\n  $('#chips', m).innerHTML = nextVersions(last).map(t => `<button class=\"chip\" data-t=\"${esc(t)}\">${esc(t)}</button>`).join('');\n  $$('[data-t]', $('#chips', m)).forEach(c => c.onclick = () => { ver.value = c.dataset.t; preview(); ver.focus(); });\n  ver.oninput = preview;\n…","approx":false},"refOf()":{"sig":"const refOf = (p, e, v) => { const ev = effective(p, e); return repoOf(ev) + ':' + tagOf(ev, v); };","code":"const refOf = (p, e, v) => { const ev = effective(p, e); return repoOf(ev) + ':' + tagOf(ev, v); };","approx":false},"POST /api/build":{"sig":"const b = await api('/api/build', {method:'POST', body:JSON.stringify({","code":"const btn = $('#go', m);\nbtn.disabled = true; btn.textContent = 'Đang khởi động…';\ntry {\n  const b = await api('/api/build', {method:'POST', body:JSON.stringify({\n    envId: e.id, version: ver.value.trim() || last, push: $('#push', m).checked\n  })});\n  closeModal();\n  state.sel = {kind:'env', id:e.id};\n  state.open.add(b.id);","approx":true},"api.startBuild()":{"sig":"func (a *api) startBuild(w http.ResponseWriter, r *http.Request) {","code":"func (a *api) startBuild(w http.ResponseWriter, r *http.Request) {\n\tvar req struct {\n\t\tEnvID   string `json:\"envId\"`\n\t\tVersion string `json:\"version\"`\n\t\tPush    bool   `json:\"push\"`\n\t}\n\tif err := json.NewDecoder(r.Body).Decode(&req); err != nil {\n\t\tfail(w, http.StatusBadRequest, \"JSON không hợp lệ\")\n\t\treturn\n\t}\n\tproject, env, found := a.store.Config().FindEnv(req.EnvID)\n\tif !found {\n\t\tfail(w, http.StatusNotFound, \"không tìm thấy môi trường\")\n\t\treturn\n\t}\n\tif !project.CanBuild(env.ID) {\n\t\tfail(w, http.StatusConflict,\n\t\t\t\"dự án \"+project.Name+\" chạy theo kiểu build một lần rồi promote, nên chỉ build được ở môi trường nguồn\")\n\t\treturn\n\t}\n\t// Fail here with something readable, rather than letting docker fail in\n\t// whatever directory this process happens to be running in.\n\tif msg := checkBuildable(project, env); msg != \"\" {\n\t\tfail(w, http.StatusBadRequest, msg)\n\t\treturn\n\t}\n\tversion := strings.TrimSpace(req.Version)\n\tif version == \"\" {\n\t\tversion = env.LastVersion\n\t}\n…","approx":false},"Config.FindEnv()":{"sig":"func (c Config) FindEnv(envID string) (Project, Env, bool) {","code":"// FindEnv locates an environment and the project that owns it.\nfunc (c Config) FindEnv(envID string) (Project, Env, bool) {\n\tfor _, p := range c.Projects {\n\t\tfor _, e := range p.Envs {\n\t\t\tif e.ID == envID {\n\t\t\t\treturn p, e, true\n\t\t\t}\n\t\t}\n\t}\n\treturn Project{}, Env{}, false\n}","approx":false},"Project.CanBuild()":{"sig":"func (p Project) CanBuild(envID string) bool {","code":"// CanBuild reports whether a build may start in this environment.\nfunc (p Project) CanBuild(envID string) bool {\n\tif p.ReleaseMode != ModePromote {\n\t\treturn true\n\t}\n\treturn p.BuildEnvID() == envID\n}","approx":false},"checkBuildable()":{"sig":"func checkBuildable(p Project, e Env) string {","code":"// checkBuildable reports why an environment could not be built, or \"\".\nfunc checkBuildable(p Project, e Env) string {\n\tenv := p.Effective(e)\n\tctx := strings.TrimSpace(env.Context)\n\tif ctx == \"\" {\n\t\treturn \"môi trường \" + e.Name + \" chưa chọn thư mục mã nguồn — mở Cài đặt dự án và bấm “Chọn thư mục”\"\n\t}\n\t// A relative path would resolve against wherever this process happens to\n\t// be running — the install folder, when opened from the Start Menu. It\n\t// is never what the person meant.\n\tif !filepath.IsAbs(ctx) {\n\t\treturn \"thư mục mã nguồn của \" + e.Name + \" đang là đường dẫn tương đối (\" + ctx +\n\t\t\t\"), phải là đường dẫn đầy đủ — bấm “Chọn thư mục” để chọn lại\"\n\t}\n\tst, err := os.Stat(ctx)\n\tif err != nil {\n\t\treturn \"không tìm thấy thư mục mã nguồn của \" + e.Name + \": \" + ctx\n\t}\n\tif !st.IsDir() {\n\t\treturn ctx + \" là một file, không phải thư mục\"\n\t}\n\twant := dockerfileOr(env.Dockerfile)\n\tif _, err := os.Stat(filepath.Join(ctx, want)); err != nil {\n\t\treturn \"không thấy \" + want + \" trong \" + ctx\n\t}\n\treturn \"\"\n}","approx":false},"checkVersion()":{"sig":"func checkVersion(v string) (string, string) {","code":"// checkVersion validates the project version a build or promote is given.\nfunc checkVersion(v string) (string, string) {\n\tv = strings.TrimSpace(v)\n\tif v == \"\" {\n\t\treturn \"\", \"chưa nhập version\"\n\t}\n\tif strings.ContainsAny(v, badTagChars) {\n\t\treturn \"\", \"version không được chứa khoảng trắng hoặc dấu : / \\\\\"\n\t}\n\treturn v, \"\"\n}","approx":false},"Store.Start()":{"sig":"func (s *Store) Start(p Project, target Env, version string, push bool) Build {","code":"// Start kicks off a build (and an optional push) in the background and\n// returns the new build record immediately. It always works with the\n// environment resolved against its project.\nfunc (s *Store) Start(p Project, target Env, version string, push bool) Build {\n\tenv := p.Effective(target)\n\tref := env.Ref(version)\n\targv := buildArgv(env, ref)\n\tdocker := s.Config().DockerBin\n\n\tb := Build{\n\t\tID:          newID(),\n\t\tProjectID:   p.ID,\n\t\tProjectName: p.Name,\n\t\tEnvID:       target.ID,\n\t\tEnvName:     target.Name,\n\t\tVersion:     version,\n\t\tTag:         env.Tag(version),\n\t\tRef:         ref,\n\t\tKind:        KindBuild,\n\t\tStatus:      \"running\",\n\t\tCommand:     docker + \" \" + strings.Join(argv, \" \"),\n\t\tStartedAt:   time.Now(),\n\t}\n\ts.addBuild(b)\n\ts.rememberVersion(target.ID, version)\n\n\tlb := s.logFor(b.ID)\n\tctx, cancel := context.WithCancel(context.Background())\n\ts.registerCancel(b.ID, cancel)\n\n\tgo func() {\n\t\tdefer cancel()\n\t\tdefer s.clearCancel(b.ID)\n…","approx":false},"Env.Ref()":{"sig":"func (e Env) Ref(version string) string {","code":"// Ref is the full image reference for a project version.\nfunc (e Env) Ref(version string) string {\n\treturn e.Repo() + \":\" + e.Tag(version)\n}","approx":false},"buildArgv()":{"sig":"func buildArgv(env Env, ref string) []string {","code":"// buildArgv assembles the docker command line for an environment.\nfunc buildArgv(env Env, ref string) []string {\n\targs := []string{\"build\", \"-t\", ref}\n\tif f := strings.TrimSpace(env.Dockerfile); f != \"\" {\n\t\targs = append(args, \"-f\", f)\n\t}\n\tfor _, kv := range env.BuildArgs {\n\t\tif strings.TrimSpace(kv.Key) == \"\" {\n\t\t\tcontinue\n\t\t}\n\t\targs = append(args, \"--build-arg\", kv.Key+\"=\"+kv.Value)\n\t}\n\tfor _, kv := range env.Labels {\n\t\tif strings.TrimSpace(kv.Key) == \"\" {\n\t\t\tcontinue\n\t\t}\n\t\targs = append(args, \"--label\", kv.Key+\"=\"+kv.Value)\n\t}\n\tif p := strings.TrimSpace(env.Platform); p != \"\" {\n\t\targs = append(args, \"--platform\", p)\n\t}\n\tif t := strings.TrimSpace(env.Target); t != \"\" {\n\t\targs = append(args, \"--target\", t)\n\t}\n\tif extra := strings.Fields(env.ExtraFlags); len(extra) > 0 {\n\t\targs = append(args, extra...)\n\t}\n\tctx := strings.TrimSpace(env.Context)\n\tif ctx == \"\" {\n\t\tctx = \".\"\n\t}\n…","approx":false},"Store.addBuild()":{"sig":"func (s *Store) addBuild(b Build) {","code":"func (s *Store) addBuild(b Build) {\n\ts.mu.Lock()\n\tdefer s.mu.Unlock()\n\ts.builds = append(s.builds, b)\n\ts.persistHistoryLocked()\n}","approx":false},"Store.logFor()":{"sig":"func (s *Store) logFor(id string) *logBuffer {","code":"func (s *Store) logFor(id string) *logBuffer {\n\ts.mu.Lock()\n\tdefer s.mu.Unlock()\n\tif lb, ok := s.logs[id]; ok {\n\t\treturn lb\n\t}\n\tlb := &logBuffer{}\n\tif f, err := os.Create(s.logPath(id)); err == nil {\n\t\tlb.file = f\n\t}\n\ts.logs[id] = lb\n\treturn lb\n}","approx":false},"Store.run()":{"sig":"func (s *Store) run(ctx context.Context, lb *logBuffer, workdir, bin string, args ...string) error {","code":"func (s *Store) run(ctx context.Context, lb *logBuffer, workdir, bin string, args ...string) error {\n\tcmd := exec.CommandContext(ctx, bin, args...)\n\thideWindow(cmd)\n\tif wd := strings.TrimSpace(workdir); wd != \"\" && wd != \".\" {\n\t\tif info, err := os.Stat(wd); err == nil && info.IsDir() {\n\t\t\tcmd.Dir = wd\n\t\t}\n\t}\n\tcmd.Env = append(os.Environ(), \"DOCKER_BUILDKIT=1\", \"BUILDKIT_PROGRESS=plain\")\n\tcmd.Stdout = lb\n\tcmd.Stderr = lb\n\tif err := cmd.Start(); err != nil {\n\t\tif strings.Contains(err.Error(), \"executable file not found\") {\n\t\t\treturn fmt.Errorf(\"không tìm thấy %q — kiểm tra Docker đã cài và nằm trong PATH\", bin)\n\t\t}\n\t\treturn err\n\t}\n\treturn cmd.Wait()\n}","approx":false},"docker push":{"sig":"if push {","code":"\treturn\n}\n\nif push {\n\tlb.writeString(\"\\n$ \" + docker + \" push \" + ref + \"\\n\\n\")\n\tif err := s.run(ctx, lb, env.Context, docker, \"push\", ref); err != nil {\n\t\tstatus := \"failed\"\n\t\tif ctx.Err() != nil {\n\t\t\tstatus = \"canceled\"","approx":true},"Store.digest()":{"sig":"func (s *Store) digest(workdir, docker, ref string) string {","code":"func (s *Store) digest(workdir, docker, ref string) string {\n\tcmd := exec.Command(docker, \"image\", \"inspect\", \"--format\", \"{{index .RepoDigests 0}}\", ref)\n\thideWindow(cmd)\n\tif wd := strings.TrimSpace(workdir); wd != \"\" && wd != \".\" {\n\t\tif info, err := os.Stat(wd); err == nil && info.IsDir() {\n\t\t\tcmd.Dir = wd\n\t\t}\n\t}\n\tout, err := cmd.Output()\n\tif err != nil {\n\t\treturn \"\"\n\t}\n\tline := strings.TrimSpace(string(out))\n\tif i := strings.Index(line, \"@\"); i >= 0 {\n\t\treturn line[i+1:]\n\t}\n\treturn \"\"\n}","approx":false},"Store.finish()":{"sig":"func (s *Store) finish(id, status, errMsg string) {","code":"func (s *Store) finish(id, status, errMsg string) {\n\ts.updateBuild(id, func(b *Build) {\n\t\tb.Status = status\n\t\tb.Err = errMsg\n\t\tb.FinishedAt = time.Now()\n\t})\n}","approx":false},"loadLog()":{"sig":"async function loadLog(id, offset=0){","code":"async function loadLog(id, offset=0){\n  if (!state.open.has(id)) return;\n  let data;\n  try { data = await api(`/api/build/${id}/log?offset=${offset}`); }\n  catch { return; }\n  const text = offset === 0\n    ? (data.chunk || '(chưa có output)')\n    : (state.logText.get(id) || '') + (data.chunk || '');\n  state.logText.set(id, text);\n\n  const pre = document.getElementById('log-'+id);\n  if (!pre) return;\n  const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;\n  pre.textContent = text;\n  if (atBottom) pre.scrollTop = pre.scrollHeight;\n\n  if (data.build.status === 'running'){\n    stopPoll(id);\n    state.pollers.set(id, setTimeout(() => loadLog(id, data.offset), 800));\n  } else {\n    stopPoll(id);\n    const known = state.builds.find(b => b.id === id);\n    if (known && known.status !== data.build.status) refresh();\n  }\n}","approx":false},"api.buildLog()":{"sig":"func (a *api) buildLog(w http.ResponseWriter, r *http.Request) {","code":"func (a *api) buildLog(w http.ResponseWriter, r *http.Request) {\n\tid := r.PathValue(\"id\")\n\tb, ok := a.store.Build(id)\n\tif !ok {\n\t\tfail(w, http.StatusNotFound, \"không tìm thấy bản build\")\n\t\treturn\n\t}\n\toffset, _ := strconv.Atoi(r.URL.Query().Get(\"offset\"))\n\tchunk, next := a.store.LogSince(id, offset)\n\twriteJSON(w, http.StatusOK, map[string]any{\n\t\t\"build\": b, \"chunk\": chunk, \"offset\": next,\n\t})\n}","approx":false},"Store.LogSince()":{"sig":"func (s *Store) LogSince(id string, offset int) (string, int) {","code":"// LogSince returns new output past offset. It falls back to the on-disk log\n// for builds from an earlier session.\nfunc (s *Store) LogSince(id string, offset int) (string, int) {\n\ts.mu.RLock()\n\tlb, ok := s.logs[id]\n\ts.mu.RUnlock()\n\tif ok {\n\t\treturn lb.since(offset)\n\t}\n\traw, err := os.ReadFile(s.logPath(id))\n\tif err != nil {\n\t\treturn \"\", 0\n\t}\n\tif offset < 0 || offset > len(raw) {\n\t\toffset = 0\n\t}\n\treturn string(raw[offset:]), len(raw)\n}","approx":false},"logBuffer.since()":{"sig":"func (l *logBuffer) since(offset int) (string, int) {","code":"func (l *logBuffer) since(offset int) (string, int) {\n\tl.mu.Lock()\n\tdefer l.mu.Unlock()\n\tb := l.buf.Bytes()\n\tif offset < 0 || offset > len(b) {\n\t\toffset = 0\n\t}\n\treturn string(b[offset:]), len(b)\n}","approx":false},"nối vào <pre>":{"sig":"pre.textContent = text;","code":"const pre = document.getElementById('log-'+id);\nif (!pre) return;\nconst atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;\npre.textContent = text;\nif (atBottom) pre.scrollTop = pre.scrollHeight;\n\nif (data.build.status === 'running'){\n  stopPoll(id);\n  state.pollers.set(id, setTimeout(() => loadLog(id, data.offset), 800));","approx":true},"status !== running?":{"sig":"if (data.build.status === 'running'){","code":"pre.textContent = text;\nif (atBottom) pre.scrollTop = pre.scrollHeight;\n\nif (data.build.status === 'running'){\n  stopPoll(id);\n  state.pollers.set(id, setTimeout(() => loadLog(id, data.offset), 800));\n} else {\n  stopPoll(id);\n  const known = state.builds.find(b => b.id === id);","approx":true},"nút Push":{"sig":"$$('[data-push]', host).forEach(el => {","code":"$$('[data-copy]', host).forEach(el => {\n  el.onclick = ev => { ev.stopPropagation(); copy(el.dataset.copy, 'Đã chép'); };\n});\n$$('[data-push]', host).forEach(el => {\n  el.onclick = async ev => {\n    ev.stopPropagation();\n    el.disabled = true; el.textContent = 'Đang push…';\n    try { await api(`/api/build/${el.dataset.push}/push`, {method:'POST'}); toast('Đã push'); await refresh(); }\n    catch (err) { toast(err.message, true); el.disabled = false; el.textContent = 'Push'; }","approx":true},"api.pushBuild()":{"sig":"func (a *api) pushBuild(w http.ResponseWriter, r *http.Request) {","code":"func (a *api) pushBuild(w http.ResponseWriter, r *http.Request) {\n\tb, ok := a.store.Build(r.PathValue(\"id\"))\n\tif !ok {\n\t\tfail(w, http.StatusNotFound, \"không tìm thấy bản build\")\n\t\treturn\n\t}\n\tworkdir := \"\"\n\tif p, e, found := a.store.Config().FindEnv(b.EnvID); found {\n\t\tworkdir = p.Effective(e).Context\n\t}\n\tif err := a.store.PushExisting(b, workdir); err != nil {\n\t\tfail(w, http.StatusInternalServerError, err.Error())\n\t\treturn\n\t}\n\tupdated, _ := a.store.Build(b.ID)\n\twriteJSON(w, http.StatusOK, updated)\n}","approx":false},"Store.Build()":{"sig":"func (s *Store) Build(id string) (Build, bool) {","code":"func (s *Store) Build(id string) (Build, bool) {\n\ts.mu.RLock()\n\tdefer s.mu.RUnlock()\n\tfor _, b := range s.builds {\n\t\tif b.ID == id {\n\t\t\treturn b, true\n\t\t}\n\t}\n\treturn Build{}, false\n}","approx":false},"PushExisting()":{"sig":"func (s *Store) PushExisting(b Build, workdir string) error {","code":"// PushExisting pushes an image that was built earlier without pushing.\nfunc (s *Store) PushExisting(b Build, workdir string) error {\n\tdocker := s.Config().DockerBin\n\tlb := s.logFor(b.ID)\n\tlb.writeString(\"\\n$ \" + docker + \" push \" + b.Ref + \"\\n\\n\")\n\tif err := s.run(context.Background(), lb, workdir, docker, \"push\", b.Ref); err != nil {\n\t\tlb.writeString(\"\\n\" + err.Error() + \"\\n\")\n\t\treturn err\n\t}\n\ts.updateBuild(b.ID, func(x *Build) {\n\t\tx.Pushed = true\n\t\tif x.Status == \"failed\" {\n\t\t\treturn\n\t\t}\n\t\tx.Status = \"success\"\n\t})\n\tif d := s.digest(workdir, docker, b.Ref); d != \"\" {\n\t\ts.updateBuild(b.ID, func(x *Build) { x.Digest = d })\n\t}\n\treturn nil\n}","approx":false},"Store.updateBuild()":{"sig":"func (s *Store) updateBuild(id string, fn func(*Build)) {","code":"func (s *Store) updateBuild(id string, fn func(*Build)) {\n\ts.mu.Lock()\n\tdefer s.mu.Unlock()\n\tfor i := range s.builds {\n\t\tif s.builds[i].ID == id {\n\t\t\tfn(&s.builds[i])\n\t\t\ts.persistHistoryLocked()\n\t\t\treturn\n\t\t}\n\t}\n}","approx":false},"promoteDialog()":{"sig":"function promoteDialog(p, src, target, version){","code":"/* ---------- promote dialog ---------- */\nfunction promoteDialog(p, src, target, version){\n  const targets = (p.envs || []).filter(e => e.id !== src.envId);\n  if (!targets.length) return toast('Dự án chưa có môi trường nào khác để đưa sang', true);\n  const initial = target && target.id !== src.envId ? target.id : targets[0].id;\n\n  const m = openModal(`\n    <h2>Đưa version ${esc(version || src.version)} sang môi trường khác</h2>\n    <p class=\"sub\">Không build lại. Image giữ nguyên digest, chỉ được gắn thêm tag mới.</p>\n    ${state.buildxOk ? '' : `<div class=\"warnbox\">Máy này không có <code>docker buildx</code>, nên image sẽ phải kéo về rồi đẩy lên lại. Chậm hơn, và manifest đa kiến trúc sẽ bị rút về một nền tảng.</div>`}\n    <label class=\"f\"><span>Nguồn — ${esc(src.envName)}</span>\n      <input type=\"text\" value=\"${esc(src.ref)}\" readonly></label>\n    <div class=\"inherited\">digest ${esc(src.digest || '—')}</div>\n    <label class=\"f\"><span>Đưa sang</span>\n      <select id=\"target\">${targets.map(e => `<option value=\"${esc(e.id)}\" ${e.id===initial?'selected':''}>${esc(e.name)}</option>`).join('')}</select>\n    </label>\n    <label class=\"f\"><span>Version</span>\n      <input type=\"text\" id=\"ver\" value=\"${esc(version || src.version)}\" autocomplete=\"off\"></label>\n    <div class=\"preview\" id=\"preview\"></div>\n    <div id=\"clash\"></div>\n    <div class=\"modal-foot\">\n      <button class=\"btn\" id=\"cancel\">Hủy</button>\n      <button class=\"btn primary\" id=\"go\">Promote</button>\n    </div>`);\n\n  const sel = $('#target', m), ver = $('#ver', m);\n  const refresh2 = () => {\n    const hit = findEnv(sel.value);\n    if (!hit) return;\n    const ev = effective(hit.p, hit.e);\n    const v = ver.value.trim() || src.version;\n…","approx":false},"cảnh báo trùng version":{"sig":"const existing = buildsOfEnv(hit.e.id).find(b => b.version === v && b.status === 'success' && b.digest);","code":"\n  // Warn when this environment already served this version from a\n  // different image — someone rebuilt the same version number.\n  const existing = buildsOfEnv(hit.e.id).find(b => b.version === v && b.status === 'success' && b.digest);\n  $('#clash', m).innerHTML = (existing && existing.digest !== src.digest)\n    ? `<div class=\"warnbox\" style=\"margin-top:12px\">${esc(hit.e.name)} đã từng nhận version ${esc(v)} với một image khác\n       (digest ${esc(shortDigest(existing.digest))}). Promote sẽ trỏ tag này sang image mới.</div>`\n    : '';\n};","approx":true},"api.promoteBuild()":{"sig":"func (a *api) promoteBuild(w http.ResponseWriter, r *http.Request) {","code":"// promoteBuild re-tags the image of an existing build for another\n// environment of the same project.\nfunc (a *api) promoteBuild(w http.ResponseWriter, r *http.Request) {\n\tsrc, ok := a.store.Build(r.PathValue(\"id\"))\n\tif !ok {\n\t\tfail(w, http.StatusNotFound, \"không tìm thấy bản build nguồn\")\n\t\treturn\n\t}\n\tvar req struct {\n\t\tEnvID   string `json:\"envId\"`\n\t\tVersion string `json:\"version\"`\n\t}\n\tif err := json.NewDecoder(r.Body).Decode(&req); err != nil {\n\t\tfail(w, http.StatusBadRequest, \"JSON không hợp lệ\")\n\t\treturn\n\t}\n\t// Only an image that actually reached the registry can be re-tagged\n\t// there; without a digest there is nothing to point the new tag at.\n\tif src.Status != \"success\" {\n\t\tfail(w, http.StatusConflict, \"chỉ promote được bản build thành công\")\n\t\treturn\n\t}\n\tif !src.Pushed || src.Digest == \"\" {\n\t\tfail(w, http.StatusConflict, \"bản này chưa được push lên registry nên chưa có digest để promote — push trước đã\")\n\t\treturn\n\t}\n\tproject, env, found := a.store.Config().FindEnv(req.EnvID)\n\tif !found {\n\t\tfail(w, http.StatusNotFound, \"không tìm thấy môi trường đích\")\n\t\treturn\n\t}\n\tif project.ID != src.ProjectID {\n…","approx":false},"status === success?":{"sig":"if src.Status != \"success\" {","code":"}\n// Only an image that actually reached the registry can be re-tagged\n// there; without a digest there is nothing to point the new tag at.\nif src.Status != \"success\" {\n\tfail(w, http.StatusConflict, \"chỉ promote được bản build thành công\")\n\treturn\n}\nif !src.Pushed || src.Digest == \"\" {\n\tfail(w, http.StatusConflict, \"bản này chưa được push lên registry nên chưa có digest để promote — push trước đã\")","approx":true},"pushed && digest?":{"sig":"if !src.Pushed || src.Digest == \"\" {","code":"\tfail(w, http.StatusConflict, \"chỉ promote được bản build thành công\")\n\treturn\n}\nif !src.Pushed || src.Digest == \"\" {\n\tfail(w, http.StatusConflict, \"bản này chưa được push lên registry nên chưa có digest để promote — push trước đã\")\n\treturn\n}\nproject, env, found := a.store.Config().FindEnv(req.EnvID)\nif !found {","approx":true},"cùng dự án, khác env":{"sig":"if project.ID != src.ProjectID {","code":"\tfail(w, http.StatusNotFound, \"không tìm thấy môi trường đích\")\n\treturn\n}\nif project.ID != src.ProjectID {\n\tfail(w, http.StatusBadRequest, \"chỉ promote được trong cùng một dự án\")\n\treturn\n}\nif env.ID == src.EnvID {\n\tfail(w, http.StatusBadRequest, \"bản này đã ở \"+env.Name+\" rồi\")","approx":true},"tag đích ≠ tag nguồn":{"sig":"if dst := project.Effective(env).Ref(version); dst == src.Ref {","code":"// Two environments of one project share a repository, so they are only\n// distinguishable by their tag prefix. Without one the promote would\n// re-point the source's own tag at itself and change nothing.\nif dst := project.Effective(env).Ref(version); dst == src.Ref {\n\tfail(w, http.StatusConflict,\n\t\t\"tag đích trùng hệt tag nguồn (\"+dst+\") nên promote sẽ không có tác dụng — đặt tiền tố tag khác nhau cho \"+\n\t\t\tsrc.EnvName+\" và \"+env.Name+\" trong cài đặt môi trường\")\n\treturn\n}","approx":true},"Store.Promote()":{"sig":"func (s *Store) Promote(p Project, target Env, src Build, version string) Build {","code":"// Promote gives an image that is already on the registry a second tag, so\n// another environment serves the byte-for-byte same image. Nothing is\n// rebuilt, so the digest of the result equals the digest of the source —\n// that equality is the whole point, and it is what makes a rollback just a\n// promote of an older version.\nfunc (s *Store) Promote(p Project, target Env, src Build, version string) Build {\n\tenv := p.Effective(target)\n\tref := env.Ref(version)\n\tsrcRef := repoOf(src.Ref) + \"@\" + src.Digest\n\tdocker := s.Config().DockerBin\n\tsteps := promoteSteps(s.buildxAvailable(), srcRef, ref)\n\n\tlines := make([]string, 0, len(steps))\n\tfor _, st := range steps {\n\t\tlines = append(lines, docker+\" \"+strings.Join(st, \" \"))\n\t}\n\n\tb := Build{\n\t\tID:            newID(),\n\t\tProjectID:     p.ID,\n\t\tProjectName:   p.Name,\n\t\tEnvID:         target.ID,\n\t\tEnvName:       target.Name,\n\t\tVersion:       version,\n\t\tTag:           env.Tag(version),\n\t\tRef:           ref,\n\t\tDigest:        src.Digest,\n\t\tKind:          KindPromote,\n\t\tSourceBuildID: src.ID,\n\t\tStatus:        \"running\",\n\t\tCommand:       strings.Join(lines, \" && \"),\n\t\tStartedAt:     time.Now(),\n\t}\n\ts.addBuild(b)\n\ts.rememberVersion(target.ID, version)\n…","approx":false},"repoOf()":{"sig":"func repoOf(ref string) string {","code":"// repoOf strips the tag or digest from an image reference, leaving the\n// repository. The colon of a registry port is not a tag separator, so only\n// a colon after the last slash counts.\nfunc repoOf(ref string) string {\n\tif i := strings.LastIndex(ref, \"@\"); i >= 0 {\n\t\tref = ref[:i]\n\t}\n\tslash := strings.LastIndex(ref, \"/\")\n\tif i := strings.LastIndex(ref, \":\"); i > slash {\n\t\treturn ref[:i]\n\t}\n\treturn ref\n}","approx":false},"buildxAvailable()":{"sig":"func (s *Store) buildxAvailable() bool {","code":"// buildxAvailable is checked once per run: the answer cannot change while\n// the app is open.\nfunc (s *Store) buildxAvailable() bool {\n\ts.buildxOnce.Do(func() {\n\t\tctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)\n\t\tdefer cancel()\n\t\tcmd := exec.CommandContext(ctx, s.Config().DockerBin, \"buildx\", \"version\")\n\t\thideWindow(cmd)\n\t\ts.buildxOK = cmd.Run() == nil\n\t})\n\treturn s.buildxOK\n}","approx":false},"promoteSteps()":{"sig":"func promoteSteps(buildx bool, srcRef, dstRef string) [][]string {","code":"// image a second tag.\n//\n// buildx does it on the registry: nothing is transferred, the digest is\n// untouched and a multi-arch manifest survives. Without buildx the image\n// has to come down to this machine and go back up, which is slower and\n// flattens a multi-arch manifest to the local platform.\nfunc promoteSteps(buildx bool, srcRef, dstRef string) [][]string {\n\tif buildx {\n\t\treturn [][]string{{\"buildx\", \"imagetools\", \"create\", \"-t\", dstRef, srcRef}}\n\t}\n\treturn [][]string{\n\t\t{\"pull\", srcRef},\n\t\t{\"tag\", srcRef, dstRef},\n\t\t{\"push\", dstRef},\n\t}\n}","approx":false},"nút Dừng build":{"sig":"$$('[data-cancel]', host).forEach(el => {","code":"    catch (err) { toast(err.message, true); el.disabled = false; el.textContent = 'Push'; }\n  };\n});\n$$('[data-cancel]', host).forEach(el => {\n  el.onclick = async ev => {\n    ev.stopPropagation();\n    try { await api(`/api/build/${el.dataset.cancel}/cancel`, {method:'POST'}); toast('Đã dừng'); }\n    catch (err) { toast(err.message, true); }\n  };","approx":true},"api.cancelBuild()":{"sig":"func (a *api) cancelBuild(w http.ResponseWriter, r *http.Request) {","code":"func (a *api) cancelBuild(w http.ResponseWriter, r *http.Request) {\n\tif !a.store.Cancel(r.PathValue(\"id\")) {\n\t\tfail(w, http.StatusConflict, \"bản build này không còn chạy\")\n\t\treturn\n\t}\n\twriteJSON(w, http.StatusOK, map[string]string{\"status\": \"canceled\"})\n}","approx":false},"Store.Cancel()":{"sig":"func (s *Store) Cancel(id string) bool {","code":"func (s *Store) Cancel(id string) bool {\n\ts.mu.Lock()\n\tfn, ok := s.cancels[id]\n\ts.mu.Unlock()\n\tif ok && fn != nil {\n\t\tfn()\n\t}\n\treturn ok\n}","approx":false},"context cancel":{"sig":"func (s *Store) Start(p Project, target Env, version string, push bool) Build {","code":"// Start kicks off a build (and an optional push) in the background and\n// returns the new build record immediately. It always works with the\n// environment resolved against its project.\nfunc (s *Store) Start(p Project, target Env, version string, push bool) Build {\n\tenv := p.Effective(target)\n\tref := env.Ref(version)\n\targv := buildArgv(env, ref)\n\tdocker := s.Config().DockerBin\n","approx":true},"nút Xóa khỏi lịch sử":{"sig":"$$('[data-del]', host).forEach(el => {","code":"    catch (err) { toast(err.message, true); }\n  };\n});\n$$('[data-del]', host).forEach(el => {\n  el.onclick = async ev => {\n    ev.stopPropagation();\n    if (!confirm('Xóa bản này khỏi lịch sử? Image trên registry không bị đụng tới.')) return;\n    await api(`/api/build/${el.dataset.del}`, {method:'DELETE'});\n    state.open.delete(el.dataset.del); stopPoll(el.dataset.del);","approx":true},"api.deleteBuild()":{"sig":"func (a *api) deleteBuild(w http.ResponseWriter, r *http.Request) {","code":"func (a *api) deleteBuild(w http.ResponseWriter, r *http.Request) {\n\ta.store.DeleteBuild(r.PathValue(\"id\"))\n\tw.WriteHeader(http.StatusNoContent)\n}","approx":false},"Store.DeleteBuild()":{"sig":"func (s *Store) DeleteBuild(id string) {","code":"func (s *Store) DeleteBuild(id string) {\n\ts.mu.Lock()\n\tdefer s.mu.Unlock()\n\tkept := s.builds[:0]\n\tfor _, b := range s.builds {\n\t\tif b.ID != id {\n\t\t\tkept = append(kept, b)\n\t\t}\n\t}\n\ts.builds = kept\n\tdelete(s.logs, id)\n\ts.persistHistoryLocked()\n\t_ = os.Remove(s.logPath(id))\n}","approx":false},"persistHistoryLocked()":{"sig":"func (s *Store) persistHistoryLocked() {","code":"func (s *Store) persistHistoryLocked() {\n\traw, err := json.MarshalIndent(history{Builds: s.builds}, \"\", \"  \")\n\tif err != nil {\n\t\treturn\n\t}\n\t_ = os.WriteFile(s.historyPath(), append(raw, '\\n'), 0o644)\n}","approx":false}};
+/* SRC-END */
+
+/* ---------- dẫn xuất từ DATA ---------- */
+const LANES = {}; DATA.lanes.forEach(l => LANES[l.key] = {...l, c: l.color});
+const LANE_ORDER = DATA.lanes.map(l => l.key);
+const SCREENS = {}; DATA.screens.forEach(s => SCREENS[s.key] = s);
+const SCREEN_ORDER = DATA.screens.map(s => s.key);
+const FLOWS = DATA.flows;
+
+const COL = 258, NW = 214, PAD_L = 128, PAD_T = 22, LANE_H = 152, BACK_GAP = 48;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $  = (s,r=document) => r.querySelector(s);
+const $$ = (s,r=document) => [...r.querySelectorAll(s)];
+
+const wrap = $('#wrap'), sizer = $('#sizer'), stage = $('#stage'), svg = $('#svg');
+let flow = null, nodes = [], edges = [], cur = -1, playing = false, timer = null, zoom = 1;
+let stageW = 0, stageH = 0, gutterY = 0;
+let mode = 'theme', picked = -1, trig = 0;
+
+document.title = DATA.app + ' — Bản đồ luồng end-to-end';
+$('#appName').textContent = DATA.app;
+$('#appSub').textContent = (DATA.tagline ? DATA.tagline + ' · ' : '') + FLOWS.length + ' luồng';
+$('#legend').innerHTML = DATA.lanes
+  .map(l => `<i style="--c:${esc(l.color)}">${esc(l.label)}</i>`).join('');
+
+function toast(msg){
+  const t = $('#toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), 1600);
+}
+
+// Mở file này bằng file:// thì không phải secure context, nên
+// navigator.clipboard không tồn tại và lời gọi đầu tiên im lặng thất bại.
+// Đường lùi là textarea ẩn + execCommand, vốn vẫn chạy ở mọi ngữ cảnh.
+function copyText(text, el){
+  const ok = () => toast('Đã chép ' + text);
+
+  // Đường lùi cuối: bôi đen sẵn chữ trên màn hình để người dùng chỉ việc Ctrl+C.
+  // Cần có, vì execCommand cũng bị chặn khi thiếu user activation.
+  const selectIt = () => {
+    if (el){
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      const sel = getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+      toast('Đã bôi đen sẵn — bấm Ctrl+C');
+    } else {
+      toast('Trình duyệt chặn clipboard');
+    }
+  };
+
+  const legacy = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:-1000px;left:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    let done = false;
+    try { done = document.execCommand('copy'); } catch { done = false; }
+    ta.remove();
+    done ? ok() : selectIt();
+  };
+
+  if (window.isSecureContext && navigator.clipboard?.writeText){
+    navigator.clipboard.writeText(text).then(ok, legacy);
+  } else {
+    legacy();
+  }
+}
+
+/* ---------- bề rộng hai cột ---------- */
+// localStorage có thể ném lỗi ở file:// hoặc cửa sổ ẩn danh, nên mọi lần đụng
+// tới nó đều phải bọc try.
+const remember = (k, v) => { try { localStorage.setItem('flowmap.' + k, v); } catch {} };
+const recall = k => { try { return localStorage.getItem('flowmap.' + k); } catch { return null; } };
+
+function setPaneWidth(which, px){
+  const min = which === 'aside' ? 180 : 240;
+  const max = Math.max(min, innerWidth - 360);
+  const w = Math.round(Math.min(max, Math.max(min, px)));
+  document.documentElement.style.setProperty(which === 'aside' ? '--asideW' : '--inspW', w + 'px');
+  remember(which + 'W', w);
+  syncLabels();
+}
+['aside','insp'].forEach(k => { const v = +recall(k + 'W'); if (v) setPaneWidth(k, v); });
+
+function mountGutter(el, which){
+  el.addEventListener('mousedown', e => {
+    e.preventDefault();
+    el.classList.add('on');
+    const startX = e.clientX;
+    const box = el.parentElement.getBoundingClientRect();
+    const base = box.width;
+    const move = ev => setPaneWidth(which, which === 'aside'
+      ? base + (ev.clientX - startX)
+      : base - (ev.clientX - startX));
+    const up = () => {
+      el.classList.remove('on');
+      removeEventListener('mousemove', move);
+      removeEventListener('mouseup', up);
+      document.body.style.userSelect = '';
+    };
+    document.body.style.userSelect = 'none';
+    addEventListener('mousemove', move);
+    addEventListener('mouseup', up);
+  });
+}
+mountGutter($('#gutterL'), 'aside');
+mountGutter($('#gutterR'), 'insp');
+
+function toggleAside(){
+  const off = document.body.classList.toggle('no-aside');
+  remember('aside', off ? 'off' : 'on');
+  syncLabels();
+}
+if (recall('aside') === 'off') document.body.classList.add('no-aside');
+$('#bAside').onclick = toggleAside;
+
+/* ---------- chỉ mục: màn hình → nút → luồng ---------- */
+const BY_SCREEN = {};
+SCREEN_ORDER.forEach(k => BY_SCREEN[k] = []);
+FLOWS.forEach((f, fi) => (f.triggers || []).forEach((t, ti) => {
+  (BY_SCREEN[t.screen] || (BY_SCREEN[t.screen] = [])).push({...t, fi, ti});
+}));
+
+/* ---------- cột trái ---------- */
+function hay(f){
+  return (f.name + ' ' + (f.sub||'') + ' ' + (f.group||'') + ' ' +
+    (f.triggers || []).map(t => t.btn + ' ' + ((SCREENS[t.screen]||{}).name||'')).join(' ') + ' ' +
+    f.steps.map(s => s.fn + ' ' + s.file + ' ' + s.desc).join(' ')).toLowerCase();
+}
+
+function renderList(){
+  const f = $('#q').value.trim().toLowerCase();
+  const host = $('#list');
+  host.innerHTML = '';
+  mode === 'theme' ? renderTheme(host, f) : renderScreens(host, f);
+  markActive();
+}
+
+function renderTheme(host, f){
+  let group = null, shown = 0;
+  FLOWS.forEach((fl, i) => {
+    if (f && !hay(fl).includes(f)) return;
+    if (fl.group !== group){
+      group = fl.group;
+      host.insertAdjacentHTML('beforeend', `<div class="grp">${esc(group || 'Luồng')}</div>`);
+    }
+    host.insertAdjacentHTML('beforeend',
+      `<button class="flow" data-i="${i}">
+         <div class="t"><span class="n">${i+1}</span><span>${esc(fl.name)}</span></div>
+         <div class="s">${esc(fl.sub || '')} · ${fl.steps.length} bước</div>
+       </button>`);
+    shown++;
+  });
+  if (!shown) host.innerHTML = `<div class="grp">Không có luồng nào khớp</div>`;
+  $$('.flow', host).forEach(b => b.onclick = () => select(+b.dataset.i, 0));
+}
+
+function renderScreens(host, f){
+  let shown = 0;
+  SCREEN_ORDER.forEach(key => {
+    const sc = SCREENS[key];
+    const rows = (BY_SCREEN[key] || []).filter(t =>
+      !f || hay(FLOWS[t.fi]).includes(f) || t.btn.toLowerCase().includes(f));
+    const navs = (sc.nav || []).filter(n => !f || (n.btn + ' ' + (n.note||'')).toLowerCase().includes(f));
+    if (!rows.length && !navs.length) return;
+    shown++;
+    host.insertAdjacentHTML('beforeend',
+      `<div class="scr">
+         <div class="sn"><b>${esc(sc.name)}</b><code>${esc(sc.fn || '')}${sc.file ? ' · ' + esc(sc.file) : ''}</code></div>
+         <div class="sd">${esc(sc.desc || '')}</div>
+       </div>`);
+    rows.forEach(t => host.insertAdjacentHTML('beforeend',
+      `<button class="btnrow" data-fi="${t.fi}" data-ti="${t.ti}">
+         <span class="chip">${esc(t.btn)}</span>
+         <span class="to">→ ${esc(FLOWS[t.fi].name)}</span>
+       </button>`));
+    navs.forEach(n => host.insertAdjacentHTML('beforeend',
+      `<div class="btnrow nav"><span class="chip">${esc(n.btn)}</span><span class="to">${esc(n.note||'')}</span></div>`));
+  });
+  if (!shown) host.innerHTML = `<div class="grp">Không có màn hình nào khớp</div>`;
+  $$('.btnrow[data-fi]', host).forEach(b => b.onclick = () => select(+b.dataset.fi, +b.dataset.ti));
+}
+
+function markActive(){
+  const i = FLOWS.indexOf(flow);
+  $$('.flow').forEach(b => b.classList.toggle('on', +b.dataset.i === i));
+  $$('.btnrow[data-fi]').forEach(b =>
+    b.classList.toggle('on', +b.dataset.fi === i && +b.dataset.ti === trig));
+}
+
+$('#q').oninput = renderList;
+$('#mTheme').onclick  = () => { mode = 'theme';  syncModes(); renderList(); };
+$('#mScreen').onclick = () => { mode = 'screen'; syncModes(); renderList(); };
+function syncModes(){
+  $('#mTheme').classList.toggle('on', mode === 'theme');
+  $('#mScreen').classList.toggle('on', mode === 'screen');
+}
+
+/* ---------- chọn luồng ---------- */
+function select(i, t = 0){
+  halt();
+  cur = -1; picked = -1;
+  flow = FLOWS[i];
+  trig = Math.min(t, Math.max(0, (flow.triggers || []).length - 1));
+  drawCrumb(); drawTriggers();
+  build();
+  setZoom(zoom);
+  markActive();
+  closeInspector();
+  reset();
+  wrap.scrollTo({left:0, top:0});
+}
+
+function drawCrumb(){
+  const t = (flow.triggers || [])[trig];
+  const sc = t ? SCREENS[t.screen] : null;
+  $('#crumb').innerHTML =
+    (sc ? `<span class="c-screen">${esc(sc.name)}</span><span class="c-sep">›</span>
+           <span class="c-btn">${esc(t.btn)}</span><span class="c-sep">›</span>` : '') +
+    `<span class="c-flow">${esc(flow.name)}</span><span class="c-sub">· ${esc(flow.sub || '')}</span>`;
+}
+
+function drawTriggers(){
+  const list = flow.triggers || [];
+  const bar = $('#trigbar');
+  const nameOf = t => (SCREENS[t.screen] || {}).name || t.screen;
+  if (list.length < 2){
+    bar.innerHTML = list.length
+      ? `<span class="lbl">Bấm từ:</span><span class="tchip on"><s>${esc(nameOf(list[0]))}</s> ${esc(list[0].btn)}</span>`
+      : `<span class="lbl">Không có nút nào mở luồng này.</span>`;
+    return;
+  }
+  bar.innerHTML = `<span class="lbl">Bấm được từ ${list.length} chỗ:</span>` + list.map((t, i) =>
+    `<button class="tchip ${i===trig?'on':''}" data-t="${i}"><s>${esc(nameOf(t))}</s> ${esc(t.btn)}</button>`).join('');
+  $$('.tchip[data-t]', bar).forEach(c => c.onclick = () => {
+    trig = +c.dataset.t; drawCrumb(); drawTriggers(); markActive();
+  });
+}
+
+/* ---------- dựng canvas ---------- */
+function build(){
+  $$('.node, .band, .lane-label', stage).forEach(el => el.remove());
+  svg.innerHTML = defs();
+  nodes = []; edges = [];
+
+  const used = LANE_ORDER.filter(l => flow.steps.some(s => s.lane === l));
+  const laneY = {};
+  used.forEach((l, k) => laneY[l] = PAD_T + k * LANE_H);
+
+  const width  = PAD_L + flow.steps.length * COL + 40;
+  const height = PAD_T * 2 + used.length * LANE_H + BACK_GAP + 20;
+  stage.style.width = width + 'px';
+  stage.style.height = height + 'px';
+  stageW = width; stageH = height;
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('width', width);
+  svg.setAttribute('height', height);
+
+  used.forEach(l => {
+    const info = LANES[l];
+    const band = document.createElement('div');
+    band.className = 'band';
+    band.style.cssText = `--c:${info.c};top:${laneY[l]}px;height:${LANE_H}px;width:${width}px`;
+    band.innerHTML = `<div class="fill"></div><div class="rule"></div>`;
+    stage.appendChild(band);
+
+    const lab = document.createElement('div');
+    lab.className = 'lane-label';
+    lab.style.cssText = `--c:${info.c};top:${laneY[l] + LANE_H/2}px;left:14px`;
+    lab.innerHTML = `${esc(info.label)}<small>${esc(info.sub || '')}</small>`;
+    stage.appendChild(lab);
+  });
+
+  flow.steps.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'node';
+    el.style.cssText = `--c:${LANES[s.lane].c};left:${PAD_L + i * COL}px;top:0px`;
+    el.innerHTML =
+      `<div class="n-top"><span class="n-i">${i+1}</span><span class="n-file">${esc(s.file)}</span></div>
+       <div class="n-fn">${esc(s.fn)}</div>
+       <div class="n-desc">${esc(s.desc)}</div>`;
+    el.onclick = () => { jump(i); openInspector(i); };
+    stage.appendChild(el);
+    nodes.push({el, x:PAD_L + i * COL, w:NW, y:0, h:0});
+  });
+
+  nodes.forEach((n, i) => {
+    n.h = n.el.offsetHeight;
+    n.y = laneY[flow.steps[i].lane] + (LANE_H - n.h) / 2;
+    n.el.style.top = n.y + 'px';
+  });
+
+  gutterY = PAD_T + used.length * LANE_H + 18;
+  for (let i = 0; i < nodes.length - 1; i++){
+    edges.push(makeEdge(i, i + 1, flow.steps[i+1].edge, 'main'));
+  }
+  (flow.extra || []).forEach((x, k) =>
+    edges.push(makeEdge(x.from, x.to, x.label, x.kind || 'err', k * 15)));
+}
+
+function defs(){
+  const mk = (id, c) =>
+    `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+       orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${c}"/></marker>`;
+  return `<defs>${DATA.lanes.map(l => mk('ar-' + l.key, l.color)).join('')}
+    ${mk('ar-err', '#8a5260')}${mk('ar-loop', '#568a77')}</defs>`;
+}
+
+function makeEdge(a, b, label, kind, drop = 0){
+  const A = nodes[a], B = nodes[b];
+  // Cạnh chính nối hai khối liền nhau thì đi thẳng. Cạnh quay lui, hoặc cạnh
+  // phụ nhảy xa, thì vòng xuống máng phía dưới để khỏi cắt ngang khối khác.
+  const detour = B.x < A.x || (kind !== 'main' && Math.abs(b - a) > 1);
+  let d;
+  if (!detour){
+    const x1 = A.x + A.w, y1 = A.y + A.h/2, x2 = B.x, y2 = B.y + B.h/2;
+    const dx = Math.max(38, (x2 - x1) / 2);
+    d = `M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`;
+  } else {
+    const yb = Math.max(gutterY, Math.max(A.y + A.h, B.y + B.h) + 34) + drop;
+    const x1 = A.x + A.w/2, x2 = B.x + B.w/2;
+    d = `M${x1},${A.y + A.h} C${x1},${yb} ${x2},${yb} ${x2},${B.y + B.h}`;
+  }
+  const ns = 'http://www.w3.org/2000/svg';
+  const g = document.createElementNS(ns, 'g');
+  const colour = LANES[flow.steps[b].lane].c;
+
+  const base = document.createElementNS(ns, 'path');
+  base.setAttribute('d', d);
+  base.setAttribute('class', 'e-base' + (kind === 'main' ? '' : ' ' + kind));
+  g.appendChild(base);
+
+  let lit = null, dash = null, alt = null;
+  if (kind === 'main'){
+    lit = document.createElementNS(ns, 'path');
+    lit.setAttribute('d', d);
+    lit.setAttribute('class', 'e-lit');
+    lit.style.setProperty('--c', colour);
+    lit.setAttribute('marker-end', `url(#ar-${flow.steps[b].lane})`);
+    g.appendChild(lit);
+
+    dash = document.createElementNS(ns, 'path');
+    dash.setAttribute('d', d);
+    dash.setAttribute('class', 'e-flow');
+    g.appendChild(dash);
+  } else {
+    base.setAttribute('marker-end', `url(#ar-${kind})`);
+    alt = document.createElementNS(ns, 'path');
+    alt.setAttribute('d', d);
+    alt.setAttribute('class', 'e-alt');
+    alt.setAttribute('stroke', kind === 'loop' ? '#7ee0a5' : '#ff7b8a');
+    g.appendChild(alt);
+  }
+
+  if (label){
+    const t = document.createElementNS(ns, 'text');
+    t.setAttribute('class', 'e-label' + (kind === 'main' ? '' : ' ' + kind));
+    t.setAttribute('text-anchor', 'middle');
+    const mid = midOf(d);
+    t.setAttribute('x', mid.x); t.setAttribute('y', mid.y - 8);
+    t.textContent = label;
+    g.appendChild(t);
+  }
+  svg.appendChild(g);
+
+  const rec = {a, b, kind, base, lit, dash, alt, len:0};
+  if (lit){
+    rec.len = lit.getTotalLength();
+    lit.style.strokeDasharray = rec.len;
+    lit.style.strokeDashoffset = rec.len;
+  }
+  return rec;
+}
+
+function midOf(d){
+  const ns = 'http://www.w3.org/2000/svg';
+  const p = document.createElementNS(ns, 'path');
+  p.setAttribute('d', d);
+  svg.appendChild(p);
+  const pt = p.getPointAtLength(p.getTotalLength() / 2);
+  p.remove();
+  return pt;
+}
+
+/* ---------- panel chi tiết ---------- */
+function openInspector(i){
+  picked = i;
+  const s = flow.steps[i], lane = LANES[s.lane], src = SRC[s.fn];
+  $('#insp').classList.remove('hide');
+  nodes.forEach((n, k) => n.el.classList.toggle('picked', k === i));
+
+  $('#inspHead').innerHTML =
+    `<span class="lane" style="--c:${lane.c}">${esc(lane.label)}</span>
+     <div class="nm"><b style="color:${lane.c}">${esc(s.fn)}</b><div>${esc(lane.sub || '')}</div></div>
+     <button class="x" id="inspX" title="Đóng">×</button>`;
+  $('#inspX').onclick = closeInspector;
+
+  const prev = i > 0 ? flow.steps[i-1] : null;
+  const next = i < flow.steps.length - 1 ? flow.steps[i+1] : null;
+
+  // Cùng một hàm thường nằm trong nhiều luồng — chỗ này là cái hay bị bỏ sót
+  // nhất khi đọc code, nên liệt kê hẳn ra và bấm sang được.
+  const xref = [];
+  FLOWS.forEach((f, fi) => f.steps.forEach((st, si) => {
+    if (st.fn === s.fn && !(f === flow && si === i)) xref.push({fi, si, f});
+  }));
+
+  const trigs = (flow.triggers || []).map(t =>
+    `<div class="pos">${esc((SCREENS[t.screen]||{}).name || t.screen)} › <b>${esc(t.btn)}</b>${
+      t.sel ? ` <code style="color:var(--dim2)">${esc(t.sel)}</code>` : ''}</div>`).join('');
+
+  $('#inspBody').innerHTML = `
+    <div class="sec"><h4>Vị trí</h4>
+      <div class="loc"><code id="locTxt">${esc(s.file)}</code><button id="locCopy">Chép</button></div>
+      ${src && src.sig ? `<div class="sig" style="margin-top:7px">${esc(src.sig)}</div>` : ''}
+    </div>
+
+    <div class="sec"><h4>Nhiệm vụ</h4><div class="desc">${esc(s.desc)}</div></div>
+
+    <div class="sec"><h4>Trong luồng này</h4>
+      <div class="pos">Bước ${i+1}/${flow.steps.length} · ${esc(flow.name)}</div>
+      <div class="hop">
+        ${prev ? `<button data-hop="${i-1}"><span>← bước ${i}</span><b>${esc(prev.fn)}</b></button>` : ''}
+        ${next ? `<button data-hop="${i+1}"><span>bước ${i+2} →</span><b>${esc(next.fn)}</b></button>` : ''}
+      </div>
+    </div>
+
+    ${trigs ? `<div class="sec"><h4>Nút mở luồng này</h4>${trigs}</div>` : ''}
+
+    ${xref.length ? `<div class="sec xref"><h4>Hàm này còn nằm ở ${xref.length} chỗ khác</h4>
+      ${xref.map(x => `<button data-fi="${x.fi}" data-si="${x.si}">${esc(x.f.name)}<i>bước ${x.si+1}</i></button>`).join('')}
+    </div>` : ''}
+
+    <div class="sec"><h4>Mã nguồn${src && src.approx ? ' — vùng quanh dòng này' : ''}</h4>
+      ${src && src.code
+        ? `<pre class="code">${esc(src.code)}</pre>
+           <div class="stamp">${src.approx
+              ? 'Bước này là một nhánh điều kiện hoặc một lời gọi, không phải cả một hàm — đây là vài dòng quanh nó. '
+              : ''}${SRC_STAMP ? 'Trích lúc ' + esc(SRC_STAMP) + ' — chạy lại <code>qf-flowmap</code> sau khi sửa mã.' : ''}</div>`
+        : `<div class="nosrc">Không trỏ vào mã nguồn trong repo, nên không có đoạn mã nào để trích.</div>`}
+    </div>`;
+
+  $('#locCopy').onclick = () => copyText(s.file, $('#locTxt'));
+  $$('[data-hop]', $('#inspBody')).forEach(b =>
+    b.onclick = () => { const k = +b.dataset.hop; jump(k); openInspector(k); });
+  $$('.xref button', $('#inspBody')).forEach(b => b.onclick = () => {
+    const fi = +b.dataset.fi, si = +b.dataset.si;
+    select(fi, 0); jump(si); openInspector(si);
+  });
+}
+
+function closeInspector(){
+  $('#insp').classList.add('hide');
+  picked = -1;
+  nodes.forEach(n => n.el.classList.remove('picked'));
+}
+
+/* ---------- phát lại ---------- */
+const dur = () => 1450 - (+$('#speed').value) * 120;
+
+function paint(animateEdge){
+  nodes.forEach((n, i) => {
+    n.el.classList.toggle('done', i < cur);
+    n.el.classList.toggle('active', i === cur);
+    n.el.classList.toggle('picked', i === picked);
+  });
+  edges.forEach(e => {
+    if (e.kind !== 'main'){
+      if (e.alt) e.alt.classList.toggle('on', cur >= e.a);
+      return;
+    }
+    const on = e.b <= cur, isCurrent = e.b === cur;
+    e.lit.classList.toggle('on', on);
+    if (on){
+      e.lit.style.transition = (isCurrent && animateEdge) ? `stroke-dashoffset ${dur()}ms linear` : 'none';
+      e.lit.style.strokeDashoffset = 0;
+    } else {
+      e.lit.style.transition = 'none';
+      e.lit.style.strokeDashoffset = e.len;
+    }
+    e.dash.classList.toggle('on', isCurrent && playing);
+  });
+  drawTrack();
+  drawNow();
+  if (cur >= 0) reveal(cur);
+}
+
+function drawTrack(){
+  $('#track').innerHTML = flow.steps.map((s, i) =>
+    `<div class="pip ${i < cur ? 'done' : ''} ${i === cur ? 'active' : ''}" data-i="${i}" title="${esc(s.fn)}">${i+1}</div>`).join('');
+  $$('#track .pip').forEach(p => p.onclick = () => { const k = +p.dataset.i; jump(k); openInspector(k); });
+  const act = $('#track .pip.active');
+  if (act) act.scrollIntoView({block:'nearest', inline:'center', behavior:'smooth'});
+}
+
+function drawNow(){
+  const host = $('#now');
+  if (cur < 0){
+    host.innerHTML = `<span class="hint">Bấm <kbd>Chạy</kbd> để mô phỏng · bấm một khối để xem chi tiết hàm · <kbd>Space</kbd> chạy/dừng · <kbd>←</kbd> <kbd>→</kbd> từng bước · <kbd>B</kbd> ẩn/hiện cột trái · kéo mép cột để đổi bề rộng · <kbd>Ctrl</kbd>+lăn chuột phóng to.</span>`;
+    return;
+  }
+  const s = flow.steps[cur];
+  host.innerHTML =
+    `<span class="k">Bước ${cur+1}/${flow.steps.length} · ${esc(LANES[s.lane].label)} · ${esc(s.file)}</span>
+     <span class="fn">${esc(s.fn)}</span><span class="d">— ${esc(s.desc)}</span>`;
+}
+
+function reveal(i){
+  const n = nodes[i];
+  const left = n.x * zoom, right = (n.x + n.w) * zoom;
+  const vl = wrap.scrollLeft, vr = vl + wrap.clientWidth;
+  if (left < vl + 60 || right > vr - 60){
+    wrap.scrollTo({left: Math.max(0, left - wrap.clientWidth / 2 + n.w * zoom / 2), behavior:'smooth'});
+  }
+  const top = n.y * zoom, bot = (n.y + n.h) * zoom;
+  const vt = wrap.scrollTop, vb = vt + wrap.clientHeight;
+  if (top < vt + 20 || bot > vb - 20){
+    wrap.scrollTo({top: Math.max(0, top - wrap.clientHeight / 2 + n.h * zoom / 2), behavior:'smooth'});
+  }
+}
+
+// halt dừng bộ đếm mà không vẽ lại — vẽ lại trước khi cur về giá trị hợp lệ
+// sẽ đọc phải một bước không tồn tại của luồng vừa chuyển sang.
+function halt(){ playing = false; clearTimeout(timer); timer = null; }
+function reset(){ halt(); cur = -1; paint(false); syncBtns(); }
+function jump(i){ halt(); cur = i; paint(false); syncBtns(); }
+function next(anim = true){
+  if (!flow || cur >= flow.steps.length - 1) return false;
+  cur++; paint(anim); syncBtns(); return true;
+}
+function prev(){ if (cur > -1){ halt(); cur--; paint(false); syncBtns(); } }
+
+function play(){
+  if (!flow) return;
+  if (cur >= flow.steps.length - 1) cur = -1;
+  playing = true; syncBtns();
+  const tick = () => {
+    if (!playing) return;
+    if (!next(true)){ playing = false; paint(false); syncBtns(); return; }
+    timer = setTimeout(tick, dur() + 240);
+  };
+  tick();
+}
+function stop(){ halt(); if (flow) paint(false); syncBtns(); }
+
+function syncBtns(){
+  const b = $('#bPlay');
+  b.textContent = playing ? '❚❚ Dừng' : '▶ Chạy';
+  b.classList.toggle('stop', playing);
+  b.classList.toggle('run', !playing);
+  $('#bPrev').disabled = !flow || cur < 0;
+  $('#bNext').disabled = !flow || cur >= flow.steps.length - 1;
+}
+
+$('#bPlay').onclick  = () => playing ? stop() : play();
+$('#bNext').onclick  = () => { stop(); next(true); };
+$('#bPrev').onclick  = prev;
+$('#bReset').onclick = reset;
+$('#bFit').onclick   = () => fit();
+
+/* ---------- thu phóng & kéo ---------- */
+function setZoom(z){
+  zoom = Math.min(1.6, Math.max(0.4, z));
+  stage.style.transform = `scale(${zoom})`;
+  sizer.style.width  = (stageW * zoom) + 'px';
+  sizer.style.height = (stageH * zoom) + 'px';
+  syncLabels();
+}
+function fit(){
+  if (!flow) return;
+  setZoom(Math.min(1, Math.max(0.55, (wrap.clientHeight - 20) / stageH)));
+  wrap.scrollTo({left:0, top:0});
+}
+wrap.addEventListener('wheel', e => {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  setZoom(zoom * (e.deltaY < 0 ? 1.1 : 0.9));
+}, {passive:false});
+
+let drag = null;
+wrap.addEventListener('mousedown', e => {
+  if (e.target.closest('.node') || e.button !== 0) return;
+  drag = {x:e.clientX, y:e.clientY, l:wrap.scrollLeft, t:wrap.scrollTop};
+  wrap.style.cursor = 'grabbing';
+});
+addEventListener('mousemove', e => {
+  if (!drag) return;
+  wrap.scrollLeft = drag.l - (e.clientX - drag.x);
+  wrap.scrollTop  = drag.t - (e.clientY - drag.y);
+});
+addEventListener('mouseup', () => { drag = null; wrap.style.cursor = ''; });
+
+function syncLabels(){
+  const dx = wrap.scrollLeft / zoom;
+  $$('.lane-label', stage).forEach(l => l.style.transform = `translateY(-50%) translateX(${dx}px)`);
+}
+wrap.addEventListener('scroll', syncLabels);
+
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space'){ e.preventDefault(); playing ? stop() : play(); }
+  else if (e.key === 'ArrowRight'){ e.preventDefault(); stop(); next(true); }
+  else if (e.key === 'ArrowLeft'){ e.preventDefault(); prev(); }
+  else if (e.key === 'Home'){ reset(); }
+  else if (e.key === 'Escape'){ closeInspector(); }
+  else if (e.key === 'b' || e.key === 'B'){ toggleAside(); }
+});
+addEventListener('resize', syncLabels);
+
+/* ---------- khởi động ---------- */
+if (!FLOWS.length){
+  document.querySelector('main').innerHTML =
+    `<div class="fatal"><b>Chưa có luồng nào.</b><br>File dữ liệu rỗng — chạy lại <code>qf-flowmap</code> sau khi điền flowmap/flows.json.</div>`;
+} else {
+  syncModes();
+  renderList();
+  select(0, 0);
+}
+</script>
+</body>
+</html>

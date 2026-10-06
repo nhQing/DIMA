@@ -1,0 +1,10 @@
+# Build outputs
+/dist/
+/dima.exe
+/dima
+
+# Local Claude agent memory/session state
+/.claude/
+
+# Go
+*.test
