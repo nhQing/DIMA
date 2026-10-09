@@ -41,11 +41,27 @@ func TestBuildVarValues(t *testing.T) {
 		"project":    "web",
 		"context":    `D:\work\web`,
 		"dockerfile": "Dockerfile", // để trống thì mặc định là Dockerfile
+		"envfile":    ".env",       // để trống thì mặc định là .env
 	}
 	for name, w := range want {
 		if values[name] != w {
 			t.Errorf("{%s} = %q, muốn %q", name, values[name], w)
 		}
+	}
+}
+
+func TestBuildVarValuesEnvFileCustomAndDefault(t *testing.T) {
+	p := Project{Name: "web"}
+	target := Env{Name: "Production"}
+
+	withCustom := buildVarValues(p, target, Env{Name: "Production", EnvFile: ".env.production"}, "1.2.3", "")
+	if got := withCustom["envfile"]; got != ".env.production" {
+		t.Errorf("{envfile} = %q, muốn .env.production", got)
+	}
+
+	withDefault := buildVarValues(p, target, Env{Name: "Production"}, "1.2.3", "")
+	if got := withDefault["envfile"]; got != ".env" {
+		t.Errorf("{envfile} = %q, để trống thì phải mặc định .env", got)
 	}
 }
 

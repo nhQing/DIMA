@@ -67,6 +67,14 @@ type Env struct {
 	Labels     []KV   `json:"labels"`
 	ExtraFlags string `json:"extraFlags"`
 
+	// EnvFile is the path to an env file a custom build command can read via
+	// {envfile} — for a script like build-and-push.sh that bakes
+	// NEXT_PUBLIC_* values into the image at build time, so the file chosen
+	// here is what decides which environment the resulting image serves.
+	// DIMA itself never reads or ships this file; it only hands the path to
+	// the command.
+	EnvFile string `json:"envFile,omitempty"`
+
 	// BuildCommand replaces `docker build` entirely when set — for folders
 	// whose build is driven by a script. Empty means the normal path.
 	BuildCommand string `json:"buildCommand"`
@@ -143,6 +151,8 @@ type Project struct {
 	BuildArgs  []KV   `json:"buildArgs"`
 	Labels     []KV   `json:"labels"`
 	ExtraFlags string `json:"extraFlags"`
+	// EnvFile is the project-wide default for Env.EnvFile. See there.
+	EnvFile string `json:"envFile,omitempty"`
 	// BuildCommand replaces `docker build` for every environment that does
 	// not override it. See Env.BuildCommand.
 	BuildCommand string `json:"buildCommand"`
@@ -219,6 +229,7 @@ func (p Project) Effective(e Env) Env {
 	out.Dockerfile = firstNonEmpty(e.Dockerfile, p.Dockerfile)
 	out.Platform = firstNonEmpty(e.Platform, p.Platform)
 	out.Target = firstNonEmpty(e.Target, p.Target)
+	out.EnvFile = firstNonEmpty(e.EnvFile, p.EnvFile)
 	out.BuildCommand = firstNonEmpty(e.BuildCommand, p.BuildCommand)
 	out.BuildArgs = mergeKV(p.BuildArgs, e.BuildArgs)
 	out.Labels = mergeKV(p.Labels, e.Labels)
@@ -613,6 +624,7 @@ func liftCommon(p *Project) {
 		{func(p *Project) *string { return &p.Dockerfile }, func(e *Env) *string { return &e.Dockerfile }},
 		{func(p *Project) *string { return &p.Platform }, func(e *Env) *string { return &e.Platform }},
 		{func(p *Project) *string { return &p.Target }, func(e *Env) *string { return &e.Target }},
+		{func(p *Project) *string { return &p.EnvFile }, func(e *Env) *string { return &e.EnvFile }},
 		{func(p *Project) *string { return &p.ExtraFlags }, func(e *Env) *string { return &e.ExtraFlags }},
 	}
 	for _, f := range fields {

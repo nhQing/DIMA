@@ -18,6 +18,7 @@ var BuildVars = []struct{ Name, About string }{
 	{"project", "tên dự án"},
 	{"context", "thư mục mã nguồn"},
 	{"dockerfile", "tên Dockerfile đang khai"},
+	{"envfile", "đường dẫn file .env đã khai cho môi trường này"},
 }
 
 // versionVar used to stand for the bare version number, without the
@@ -66,6 +67,7 @@ func buildVarValues(p Project, target Env, env Env, version, ref string) map[str
 		"project":    p.Name,
 		"context":    strings.TrimSpace(env.Context),
 		"dockerfile": dockerfileOr(env.Dockerfile),
+		"envfile":    envFileOr(env.EnvFile),
 	}
 }
 

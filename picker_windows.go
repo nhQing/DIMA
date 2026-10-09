@@ -48,6 +48,28 @@ func pickFolder(title string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// pickFile shows the Windows file chooser, optionally starting in
+// initialDir. It returns an empty string when the dialog is cancelled.
+func pickFile(title, initialDir string) (string, error) {
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-STA",
+		"-ExecutionPolicy", "Bypass", "-EncodedCommand", encodePowerShell(filePickerScript))
+	// title and initialDir travel together over stdin, separated by a null
+	// byte neither can contain, so one Reader covers both without risking
+	// either value breaking out of a quoted PowerShell string.
+	cmd.Stdin = strings.NewReader(title + "\x00" + initialDir)
+	hideWindow(cmd)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return "", fmt.Errorf("không mở được hộp thoại chọn file: %s", msg)
+		}
+		return "", fmt.Errorf("không mở được hộp thoại chọn file: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // encodePowerShell turns a script into what -EncodedCommand expects:
 // base64 of its UTF-16LE bytes.
 func encodePowerShell(script string) string {
@@ -183,4 +205,147 @@ public static class DimaFolderPicker {
 }
 '@
 [Console]::Out.Write([DimaFolderPicker]::Pick([Console]::In.ReadToEnd().Trim()))
+`
+
+// filePickerScript mirrors pickerScript above, but for a single existing
+// file instead of a folder — same COM dialog, same window-centering dance,
+// just different IFileOpenDialog options. See pickerScript for why
+// powershell.exe hosts it and why the dialog is owned by an invisible
+// topmost window.
+const filePickerScript = `$ErrorActionPreference = 'Stop'
+trap { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
+[Console]::InputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Add-Type -ReferencedAssemblies System.Windows.Forms, System.Drawing -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
+
+public static class DimaFilePicker {
+  [ComImport, Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7")]
+  class FileOpenDialogCoClass {}
+
+  [ComImport, Guid("42f85136-db7e-439c-85f1-e4075d135fc8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IFileOpenDialog {
+    [PreserveSig] int Show(IntPtr parent);
+    void SetFileTypes(uint cFileTypes, IntPtr rgFilterSpec);
+    void SetFileTypeIndex(uint iFileType);
+    void GetFileTypeIndex(out uint piFileType);
+    void Advise(IntPtr pfde, out uint pdwCookie);
+    void Unadvise(uint dwCookie);
+    void SetOptions(uint fos);
+    void GetOptions(out uint pfos);
+    void SetDefaultFolder(IShellItem psi);
+    void SetFolder(IShellItem psi);
+    void GetFolder(out IShellItem ppsi);
+    void GetCurrentSelection(out IShellItem ppsi);
+    void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string pszName);
+    void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string pszName);
+    void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string pszTitle);
+    void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string pszText);
+    void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string pszLabel);
+    void GetResult(out IShellItem ppsi);
+  }
+
+  [ComImport, Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IShellItem {
+    void BindToHandler(IntPtr pbc, [MarshalAs(UnmanagedType.LPStruct)] Guid bhid, [MarshalAs(UnmanagedType.LPStruct)] Guid riid, out IntPtr ppv);
+    void GetParent(out IShellItem ppsi);
+    void GetDisplayName(uint sigdnName, [MarshalAs(UnmanagedType.LPWStr)] out string ppszName);
+  }
+
+  [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+  static extern void SHCreateItemFromParsingName(
+    [MarshalAs(UnmanagedType.LPWStr)] string pszPath, IntPtr pbc,
+    [MarshalAs(UnmanagedType.LPStruct)] Guid riid,
+    [MarshalAs(UnmanagedType.Interface)] out IShellItem ppv);
+
+  [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+  [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+  [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+  [StructLayout(LayoutKind.Sequential)] struct RECT { public int Left, Top, Right, Bottom; }
+
+  const uint FOS_FORCEFILESYSTEM = 0x40, FOS_FILEMUSTEXIST = 0x1000, FOS_PATHMUSTEXIST = 0x800;
+  const uint SIGDN_FILESYSPATH = 0x80058000;
+  const int ERROR_CANCELLED = unchecked((int)0x800704C7);
+  const uint GW_ENABLEDPOPUP = 6, SWP_NOSIZE = 0x1, SWP_NOZORDER = 0x4;
+
+  static void CenterWhenShown(Form owner) {
+    Timer t = new Timer();
+    t.Interval = 15;
+    int still = 0, ticks = 0;
+    bool focused = false;
+    t.Tick += delegate {
+      if (++ticks > 200) { t.Stop(); return; }
+      IntPtr h = GetWindow(owner.Handle, GW_ENABLEDPOPUP);
+      if (h == IntPtr.Zero || !IsWindowVisible(h)) return;
+      if (!focused) { SetForegroundWindow(h); focused = true; }
+      RECT r;
+      GetWindowRect(h, out r);
+      int w = r.Right - r.Left, ht = r.Bottom - r.Top;
+      System.Drawing.Rectangle wa = Screen.FromHandle(h).WorkingArea;
+      int x = wa.Left + Math.Max(0, (wa.Width - w) / 2);
+      int y = wa.Top + Math.Max(0, (wa.Height - ht) / 2);
+      if (r.Left == x && r.Top == y) {
+        if (++still >= 20) t.Stop();
+        return;
+      }
+      still = 0;
+      SetWindowPos(h, IntPtr.Zero, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+    };
+    t.Start();
+  }
+
+  // ShellItemFromPath is best-effort: a stale or empty initialDir just means
+  // the dialog opens at its own remembered location instead of failing.
+  static IShellItem ShellItemFromPath(string path) {
+    if (string.IsNullOrEmpty(path)) return null;
+    try {
+      IShellItem item;
+      SHCreateItemFromParsingName(path, IntPtr.Zero, typeof(IShellItem).GUID, out item);
+      return item;
+    } catch { return null; }
+  }
+
+  public static string Pick(string title, string initialDir) {
+    Form owner = new Form();
+    owner.TopMost = true;
+    owner.ShowInTaskbar = false;
+    owner.FormBorderStyle = FormBorderStyle.None;
+    owner.StartPosition = FormStartPosition.CenterScreen;
+    owner.Size = new System.Drawing.Size(1, 1);
+    owner.Opacity = 0;
+    owner.Show();
+    keybd_event(0x12, 0, 0, UIntPtr.Zero);
+    keybd_event(0x12, 0, 2, UIntPtr.Zero);
+    SetForegroundWindow(owner.Handle);
+    owner.Activate();
+
+    try {
+      IFileOpenDialog dlg = (IFileOpenDialog)new FileOpenDialogCoClass();
+      dlg.SetOptions(FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST);
+      if (!string.IsNullOrEmpty(title)) dlg.SetTitle(title);
+      dlg.SetOkButtonLabel("Chọn file");
+      IShellItem folder = ShellItemFromPath(initialDir);
+      if (folder != null) dlg.SetFolder(folder);
+      CenterWhenShown(owner);
+      int hr = dlg.Show(owner.Handle);
+      if (hr == ERROR_CANCELLED) return "";
+      if (hr != 0) Marshal.ThrowExceptionForHR(hr);
+      IShellItem item;
+      dlg.GetResult(out item);
+      string path;
+      item.GetDisplayName(SIGDN_FILESYSPATH, out path);
+      return path;
+    } finally {
+      owner.Close();
+    }
+  }
+}
+'@
+$parts = [Console]::In.ReadToEnd() -split "` + "`" + `0"
+[Console]::Out.Write([DimaFilePicker]::Pick($parts[0], $(if ($parts.Length -gt 1) { $parts[1] } else { '' })))
 `

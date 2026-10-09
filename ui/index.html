@@ -1627,6 +1627,29 @@ function mountPath(input, btn, infoEl, wantedDockerfile, inheritedPath, onPick){
   return check;
 }
 
+// mountFilePick wires a plain "Chọn file" button next to a text input — no
+// inline validation like mountPath's Dockerfile check, since a missing or
+// renamed .env file is the build command's problem to report, not a reason
+// to block saving settings. dirGetter supplies the project's source folder
+// so the dialog opens there and the result comes back as a name relative to
+// it, same as Dockerfile is typed relative to that folder.
+function mountFilePick(input, btn, dirGetter){
+  btn.onclick = async () => {
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = 'Đang mở…';
+    try {
+      const dir = (dirGetter && dirGetter()) || '';
+      const picked = await api('/api/pick-file?dir=' + encodeURIComponent(dir), {method:'POST'});
+      if (picked.path) input.value = picked.path;
+    } catch (e) {
+      toast(e.message, true);
+    } finally {
+      btn.disabled = false; btn.textContent = label;
+    }
+  };
+}
+
 /* ---------- key/value editor ---------- */
 function kvBlock(hint){
   return `<fieldset>
@@ -1700,6 +1723,12 @@ function projectDialog(p){
       <label class="f"><span>Platform</span><input type="text" id="f-plat" value="${esc(draft.platform||'')}" placeholder="linux/amd64"></label>
       <label class="f"><span>Target stage</span><input type="text" id="f-target" value="${esc(draft.target||'')}" placeholder="để trống nếu không dùng"></label>
     </div>
+    <label class="f"><span>File .env — dùng qua biến {envfile}</span>
+      <div class="pathrow">
+        <input type="text" id="f-envfile" value="${esc(draft.envFile||'')}" placeholder=".env">
+        <button type="button" class="btn" id="pick-envfile">Chọn file</button>
+      </div>
+    </label>
     <label class="f"><span>Cờ thêm cho docker build</span><input type="text" id="f-extra" value="${esc(draft.extraFlags||'')}" placeholder="--no-cache"></label>
     <label class="f"><span>Lệnh build riêng — để trống thì chạy <code>docker build</code></span>
       <input type="text" id="f-cmd" value="${esc(draft.buildCommand||'')}" placeholder="./build.ps1 {tag}"></label>
@@ -1733,6 +1762,8 @@ function projectDialog(p){
     path => { if (group.isEmpty()) group.suggest(parentName(path)); });
   $('#f-df', m).oninput = recheck;
 
+  mountFilePick($('#f-envfile', m), $('#pick-envfile', m), () => $('#f-ctx', m).value.trim());
+
   $('#cancel', m).onclick = closeModal;
 
   $('#rm', m).onclick = async () => {
@@ -1756,6 +1787,7 @@ function projectDialog(p){
       dockerfile: $('#f-df', m).value.trim(),
       platform: $('#f-plat', m).value.trim(),
       target: $('#f-target', m).value.trim(),
+      envFile: $('#f-envfile', m).value.trim(),
       extraFlags: $('#f-extra', m).value.trim(),
     });
     draft.buildArgs = draft.buildArgs.filter(r => r.key.trim());
@@ -1795,6 +1827,12 @@ function envDialog(p, e){
       <label class="f"><span>Platform</span><input type="text" id="f-plat" value="${esc(draft.platform||'')}" placeholder="${esc(inh(p.platform))}"></label>
       <label class="f"><span>Target stage</span><input type="text" id="f-target" value="${esc(draft.target||'')}" placeholder="${esc(inh(p.target))}"></label>
     </div>
+    <label class="f"><span>File .env — dùng qua biến {envfile}</span>
+      <div class="pathrow">
+        <input type="text" id="f-envfile" value="${esc(draft.envFile||'')}" placeholder="${esc(inh(p.envFile))}">
+        <button type="button" class="btn" id="pick-envfile">Chọn file</button>
+      </div>
+    </label>
     <label class="f"><span>Cờ thêm — nối vào cờ của dự án</span>
       <input type="text" id="f-extra" value="${esc(draft.extraFlags||'')}" placeholder="${esc(p.extraFlags ? 'dự án đang có: '+p.extraFlags : '--no-cache')}"></label>
     <label class="f"><span>Lệnh build riêng</span>
@@ -1844,6 +1882,9 @@ function envDialog(p, e){
   localChk.onchange = syncLocal; syncLocal();
 
   mountVarHelp($('#f-cmd', m), $('#varhelp', m));
+  // Context lives on the project only (Env has no context of its own — see
+  // Project.Effective), so the dialog starts there regardless of this env.
+  mountFilePick($('#f-envfile', m), $('#pick-envfile', m), () => p.context || '');
 
   $('#cancel', m).onclick = closeModal;
 
@@ -1865,6 +1906,7 @@ function envDialog(p, e){
       dockerfile: $('#f-df', m).value.trim(),
       platform: $('#f-plat', m).value.trim(),
       target: $('#f-target', m).value.trim(),
+      envFile: $('#f-envfile', m).value.trim(),
       extraFlags: $('#f-extra', m).value.trim(),
       buildCommand: $('#f-cmd', m).value.trim(),
       isOnlyLocal: localChk.checked,

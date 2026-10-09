@@ -19,6 +19,7 @@ func TestEffectiveInheritsEmptyFieldsFromProject(t *testing.T) {
 	p := Project{
 		Registry: "reg.local", Image: "my-api", Context: "/src",
 		Dockerfile: "Dockerfile", Platform: "linux/amd64", Target: "runtime",
+		EnvFile: ".env",
 	}
 	e := Env{Name: "Staging"}
 
@@ -31,6 +32,7 @@ func TestEffectiveInheritsEmptyFieldsFromProject(t *testing.T) {
 		{"dockerfile", got.Dockerfile, "Dockerfile"},
 		{"platform", got.Platform, "linux/amd64"},
 		{"target", got.Target, "runtime"},
+		{"envFile", got.EnvFile, ".env"},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s = %q, muốn %q", c.name, c.got, c.want)
@@ -49,6 +51,18 @@ func TestEffectiveEnvOverridesProject(t *testing.T) {
 	}
 	if got.Registry != "reg.local" {
 		t.Errorf("registry = %q, muốn vẫn kế thừa từ project", got.Registry)
+	}
+}
+
+func TestEffectiveEnvFileEnvOverridesProject(t *testing.T) {
+	p := Project{EnvFile: ".env"}
+	e := Env{EnvFile: ".env.production"}
+
+	if got := p.Effective(e).EnvFile; got != ".env.production" {
+		t.Errorf("envFile = %q, muốn bản ghi đè của môi trường", got)
+	}
+	if got := p.Effective(Env{}).EnvFile; got != ".env" {
+		t.Errorf("envFile = %q, môi trường bỏ trống thì phải kế thừa của dự án", got)
 	}
 }
 

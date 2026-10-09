@@ -86,7 +86,7 @@ Cả hai màn quét đều đánh dấu "đã có" và khóa những thứ đã 
 
 Riêng màn quét image tích sẵn các repository có **tên miền registry riêng** (`harbor.tech/...`) và để trống các image Docker Hub, vì repo trên registry riêng gần như luôn là của bạn. Đây chỉ là phỏng đoán: một image công khai tải từ registry khác Docker Hub, ví dụ `codeberg.org/forgejo/forgejo`, cũng sẽ bị tích sẵn. Badge luôn hiện tên registry để bạn thấy mà bỏ tích.
 
-**Dự án** giữ thư mục mã nguồn, registry, tên image, Dockerfile, platform, target stage, cờ thêm, build args và labels chung.
+**Dự án** giữ thư mục mã nguồn, registry, tên image, Dockerfile, platform, target stage, file `.env`, cờ thêm, build args và labels chung.
 
 Việc đầu tiên khi tạo dự án là bấm **Chọn thư mục** để chỉ ra thư mục mã nguồn — đó là nơi lệnh `docker build` sẽ chạy. Hộp thoại là hộp thoại chọn thư mục của chính hệ điều hành, vì trang web trong trình duyệt không bao giờ được biết đường dẫn thật trên máy.
 
@@ -133,6 +133,7 @@ Lệnh nhận các biến trong ngoặc nhọn:
 | `{repo}` · `{registry}` · `{image}` | các phần của tên image |
 | `{env}` · `{project}` | tên môi trường, tên dự án |
 | `{context}` · `{dockerfile}` | thư mục mã nguồn, tên Dockerfile |
+| `{envfile}` | đường dẫn file `.env` đã khai ở môi trường (ô "File .env"); để trống thì mặc định `.env` |
 
 Ví dụ: `./build.ps1 -Version {version} -Ref {ref}`. Gõ sai tên biến thì nó được giữ nguyên trong lệnh chứ không âm thầm thành rỗng — sai sót phải nhìn thấy được.
 

@@ -19,6 +19,7 @@ func (a *api) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/config/versions/{file}", a.readVersion)
 	mux.HandleFunc("POST /api/config/versions/{file}/restore", a.restoreVersion)
 	mux.HandleFunc("POST /api/pick-folder", a.pickFolder)
+	mux.HandleFunc("POST /api/pick-file", a.pickFile)
 	mux.HandleFunc("GET /api/inspect-folder", a.inspectFolder)
 	mux.HandleFunc("GET /api/scan-folder", a.scanFolder)
 	mux.HandleFunc("GET /api/git", a.gitInfo)
@@ -168,6 +169,35 @@ func (a *api) pickFolder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, inspectFolder(path, ""))
 }
 
+// pickFile opens the desktop's own file chooser, used for the .env file
+// field. The dialog starts in the project's source folder (query param
+// "dir") when one is given, and the path comes back relative to that folder
+// when the chosen file sits under it — matching how Dockerfile is typed as
+// a name relative to the context, not as an absolute path.
+func (a *api) pickFile(w http.ResponseWriter, r *http.Request) {
+	dir := r.URL.Query().Get("dir")
+	path, err := pickFile("Chọn file .env", dir)
+	if err != nil {
+		fail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"path": relativeToOr(path, dir)})
+}
+
+// relativeToOr rewrites path relative to dir when it sits under dir;
+// otherwise (no dir known, or the file lives outside it) the path is handed
+// back untouched rather than with a leading "../../" nobody asked for.
+func relativeToOr(path, dir string) string {
+	if path == "" || dir == "" {
+		return path
+	}
+	rel, err := filepath.Rel(dir, path)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+		return path
+	}
+	return filepath.ToSlash(rel)
+}
+
 // inspectFolder answers what the settings form needs to show about a path:
 // does it exist, and which Dockerfiles are in it.
 func (a *api) inspectFolder(w http.ResponseWriter, r *http.Request) {
@@ -190,6 +220,15 @@ func dockerfileOr(name string) string {
 		return n
 	}
 	return "Dockerfile"
+}
+
+// envFileOr mirrors dockerfileOr: an env file left blank still expands to
+// the plain ".env" a custom command is most likely to expect.
+func envFileOr(path string) string {
+	if p := strings.TrimSpace(path); p != "" {
+		return p
+	}
+	return ".env"
 }
 
 func inspectFolder(path, dockerfile string) folderInfo {
