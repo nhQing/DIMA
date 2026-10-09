@@ -113,7 +113,7 @@ Copy-Item (Join-Path $PSScriptRoot "go.mod"),
           (Join-Path $PSScriptRoot "build.ps1"),
           (Join-Path $PSScriptRoot "install.ps1"),
           (Join-Path $PSScriptRoot "uninstall.ps1"),
-          (Join-Path $PSScriptRoot "DIMA-README.md") $stage
+          (Join-Path $PSScriptRoot "README.md") $stage
 Copy-Item (Join-Path $PSScriptRoot "ui\*") (Join-Path $stage "ui")
 Compress-Archive -Path (Join-Path $stage "*") -DestinationPath (Join-Path $dist "dima-src-$Version.zip") -Force
 Remove-Item -Recurse -Force $stage
