@@ -1338,7 +1338,7 @@ function buildDialog(p, e, preset){
     <h2>Build ${esc(e.name)}</h2>
     <p class="sub">Dự án ${esc(p.name)}</p>
     <label class="f"><span>Version của dự án</span>
-      <input type="text" id="ver" value="${esc(preset || '')}" placeholder="${esc(last || '1.0.0')}" autocomplete="off">
+      <input type="text" id="ver" value="${esc(preset || last || '')}" placeholder="1.0.0" autocomplete="off">
     </label>
     <div class="suggest" id="chips"></div>
     <div class="preview" id="preview"></div>
@@ -1361,6 +1361,9 @@ function buildDialog(p, e, preset){
   ver.oninput = preview;
   preview();
   ver.focus();
+  // Giá trị đã điền sẵn là version cũ — chọn hết để gõ số mới là ghi đè
+  // ngay, khỏi phải tự xoá; Enter không gõ gì thì vẫn build đúng version đó.
+  ver.select();
   showBranch(p, e, $('#gitbox', m));
   $('#cancel', m).onclick = closeModal;
   ver.onkeydown = ev2 => { if (ev2.key === 'Enter') $('#go', m).click(); };
