@@ -56,12 +56,24 @@ func planCleanup(p Project, images []LocalImage, history []Build, containers []C
 		}
 	}
 	// history is newest first: the first success per environment is current.
-	current := map[string]string{}
+	// Kept as a set of refs across all environments, not looked up by the
+	// environment a tag is filed under: two environments that share a repo and
+	// a prefix (a Cache next to a Staging, both with none) have every tag
+	// filed under one of them, and the other one's current image would
+	// otherwise be ranked as an old version of the first and removed.
+	currentEnv := map[string]bool{}
+	currentRef := map[string]string{} // ref → name of the env it is current in
+	envName := map[string]string{}
+	for _, e := range p.Envs {
+		envName[e.ID] = e.Name
+	}
 	for _, b := range history {
-		if b.Status == "success" && b.ProjectID == p.ID {
-			if _, seen := current[b.EnvID]; !seen {
-				current[b.EnvID] = b.Ref
-			}
+		if b.Status != "success" || b.ProjectID != p.ID || currentEnv[b.EnvID] {
+			continue
+		}
+		currentEnv[b.EnvID] = true
+		if _, taken := currentRef[b.Ref]; !taken {
+			currentRef[b.Ref] = envName[b.EnvID]
 		}
 	}
 
@@ -92,7 +104,7 @@ func planCleanup(p Project, images []LocalImage, history []Build, containers []C
 		items = append(items, it)
 	}
 
-	for envID, idx := range byEnv {
+	for _, idx := range byEnv {
 		sort.Slice(idx, func(a, b int) bool {
 			ia, ib := items[idx[a]], items[idx[b]]
 			if !ia.CreatedAt.Equal(ib.CreatedAt) {
@@ -102,11 +114,12 @@ func planCleanup(p Project, images []LocalImage, history []Build, containers []C
 		})
 		for rank, i := range idx {
 			it := &items[i]
+			curEnv, isCurrent := currentRef[it.Ref]
 			switch {
 			case usedBy[it.Ref] != "":
 				it.Why = "container " + usedBy[it.Ref] + " đang dùng"
-			case current[envID] == it.Ref:
-				it.Why = "bản hiện tại của " + it.EnvName
+			case isCurrent:
+				it.Why = "bản hiện tại của " + firstNonEmpty(curEnv, it.EnvName)
 			case rank < keep:
 				it.Why = "trong " + strconv.Itoa(keep) + " bản mới nhất"
 			default:

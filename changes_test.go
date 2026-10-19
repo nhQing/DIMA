@@ -77,4 +77,18 @@ func TestBuildChangesComparesWithThePreviousBuildOfTheSameEnv(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || body.From != c1 || body.FromVersion != "1.0.0" || len(body.Commits) != 2 {
 		t.Errorf("status=%d body=%+v", resp.StatusCode, body)
 	}
+
+	// Lùi về commit cũ: không được trả "không có thay đổi", mà phải nói bản
+	// này bỏ đi những commit nào.
+	store.addBuild(Build{ID: "back", ProjectID: "p", EnvID: "stg", Tag: "1.0.1", Commit: c1, Status: "success", StartedAt: t0.Add(3 * time.Minute)})
+	resp2, err := http.Get(srv.URL + "/api/build/back/changes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp2.Body.Close()
+	var back struct{ Commits, Removed []Commit }
+	json.NewDecoder(resp2.Body).Decode(&back)
+	if len(back.Commits) != 0 || len(back.Removed) != 2 {
+		t.Errorf("rollback: commits=%d removed=%d, muốn 0 và 2", len(back.Commits), len(back.Removed))
+	}
 }

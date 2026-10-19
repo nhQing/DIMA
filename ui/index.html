@@ -8,7 +8,10 @@
 <style>
 :root{
   --ink:#0E1620; --panel:#16212E; --raised:#1E2B3A; --line:#2A3948;
-  --text:#DCE5EE; --muted:#8095A9; --dim:#5D7189;
+  /* --dim was #5D7189: 3.2:1 on the panel, below the 4.5:1 WCAG AA asks of
+     body text — and it carries a lot of it here (times, digests, notes, the
+     "chưa có bản nào" lines). This keeps it a step below --muted. */
+  --text:#DCE5EE; --muted:#8095A9; --dim:#7A8EA6;
   --accent:#4FA8E8; --accent-soft:#1B3A52;
   --live:#F0A44A; --ok:#46C98B; --bad:#E8705E; --promo:#B98BE0;
   --scroll:#2C3646; --scroll-hover:#44546A;
@@ -828,7 +831,7 @@ async function saveConfig(next, okMsg){
 const cloneConfig = () => JSON.parse(JSON.stringify(state.config));
 
 /* ---------- render ---------- */
-function render(){ renderRail(); renderPane(); }
+function render(){ renderRail(); renderPane(); labelDots(); }
 
 // grouped returns [groupName, projects] pairs, named groups first in
 // alphabetical order and the ungrouped ones last.
@@ -1364,6 +1367,8 @@ function renderBuilds(p, e, list){
         <span class="badge ${b.pushed?'pushed':''}">${b.pushed?'đã push':'chỉ có trên máy'}</span>
       </button>${open ? detailHTML(p, e, b) : ''}`;
   }).join('') + `</div>`;
+  // Opening a card redraws only this list, not the whole page.
+  labelDots(host);
 
   $$('[data-b]', host).forEach(el => {
     el.onclick = () => {
@@ -1413,11 +1418,14 @@ function renderBuilds(p, e, list){
       try {
         const res = await api(`/api/build/${id}/changes`);
         const since = res.fromVersion ? `từ <code>${esc(res.fromVersion)}</code> (${esc(res.from)}) tới ${esc(res.to)}` : `tới ${esc(res.to)} — chưa có bản trước để so`;
-        html = !res.commits.length
-          ? `<div class="gitline">Không có commit mới ${since}: cùng mã nguồn với bản trước.</div>`
-          : `<div class="gitline" style="margin:0 0 6px">${res.commits.length}${res.truncated ? '+' : ''} commit ${since}</div>
-             <div class="changes">${res.commits.map(c => `<div><code>${esc(c.hash)}</code> ${esc(c.subject)}
+        const list = cs => `<div class="changes">${cs.map(c => `<div><code>${esc(c.hash)}</code> ${esc(c.subject)}
                <span class="row-when">${esc(c.author)} · ${esc(c.date)}</span></div>`).join('')}</div>`;
+        html = res.removed
+          ? `<div class="pathinfo bad" style="margin:0 0 6px">Bản này lùi về mã nguồn cũ hơn bản trước — ${res.removed.length}${res.truncated ? '+' : ''}
+               commit của bản trước KHÔNG có trong bản này (${since}):</div>${list(res.removed)}`
+          : !res.commits.length
+          ? `<div class="gitline">Không có commit mới ${since}: cùng mã nguồn với bản trước.</div>`
+          : `<div class="gitline" style="margin:0 0 6px">${res.commits.length}${res.truncated ? '+' : ''} commit ${since}</div>${list(res.commits)}`;
       } catch (err) {
         html = `<div class="pathinfo bad" style="margin:0">${esc(err.message)}</div>`;
       }
@@ -1582,10 +1590,28 @@ async function loadLog(id, offset=0){
 function closeModal(){ $('#modalHost').innerHTML = ''; document.removeEventListener('keydown', onEsc); }
 function onEsc(e){ if (e.key === 'Escape') closeModal(); }
 function openModal(html, wide=false){
-  $('#modalHost').innerHTML = `<div class="veil"><div class="modal${wide?' wide':''}">${html}</div></div>`;
+  $('#modalHost').innerHTML = `<div class="veil"><div class="modal${wide?' wide':''}" role="dialog" aria-modal="true">${html}</div></div>`;
   document.addEventListener('keydown', onEsc);
   $('.veil').onclick = e => { if (e.target === $('.veil')) closeModal(); };
-  return $('.modal');
+  const m = $('.modal');
+  // A screen reader announces the dialog by its heading.
+  const h = $('h2', m);
+  if (h){ h.id = 'modal-title'; m.setAttribute('aria-labelledby', 'modal-title'); }
+  return m;
+}
+
+// Status dots carry meaning by colour alone — green, amber, red — which
+// neither a screen reader nor a colour-blind reader gets. Each one is given
+// its status in words, as a label and as a hover title.
+const STATUS_WORDS = {success:'thành công', running:'đang chạy', failed:'lỗi', canceled:'đã hủy'};
+function labelDots(root=document){
+  $$('.dot:not([aria-label])', root).forEach(d => {
+    const s = [...d.classList].find(c => c in STATUS_WORDS);
+    if (!s) return;
+    d.setAttribute('role', 'img');
+    d.setAttribute('aria-label', STATUS_WORDS[s]);
+    if (!d.title) d.title = STATUS_WORDS[s];
+  });
 }
 
 /* ---------- build dialog ---------- */
@@ -1738,11 +1764,12 @@ function buildDialog(p, e, preset){
     $('#problems', m).innerHTML = issues.length
       ? `<div class="warnbox" style="margin:10px 0 0">${issues.map(esc).join('<br>')}</div>` : '';
     const src = promoteSource(p, ver.value.trim(), e.id);
-    $('#outside', m).innerHTML = plan.outsideSource
-      ? `<div class="warnbox">Dự án này thường build ở <b>${esc(((p.envs||[]).find(x => x.id === buildEnvId(p))||{}).name || 'môi trường nguồn')}</b>
-          rồi promote. Build riêng ở ${esc(e.name)} sẽ ra một image mới, khác digest với bản đã test.
-          ${src ? `<div style="margin-top:8px">Version ${esc(src.version)} đã có bản đẩy lên ở ${esc(src.envName)}.
-            <button class="btn sm" id="viaPromote" style="margin-left:6px">Promote bản đó thay vì build</button></div>` : ''}</div>`
+    // Why building here needs a yes is said once, next to the tick box. Up
+    // here only the better road: the tested image is already on the registry.
+    $('#outside', m).innerHTML = plan.outsideSource && src
+      ? `<div class="warnbox">Version ${esc(src.version)} đã có bản đẩy lên ở ${esc(src.envName)} —
+          promote đưa đúng image đã test sang ${esc(e.name)}, khỏi build lại.
+          <button class="btn sm" id="viaPromote" style="margin-left:6px">Promote bản đó thay vì build</button></div>`
       : '';
     const via = $('#viaPromote', m);
     if (via) via.onclick = () => promoteDialog(p, src, e, src.version);
@@ -2191,7 +2218,7 @@ function mountKV(fs, rows){
       el.className = 'kv-row';
       el.innerHTML = `<input type="text" placeholder="KEY" value="${esc(r.key)}">
         <input type="text" placeholder="giá trị" value="${esc(r.value)}">
-        <button type="button" class="iconbtn" title="Xóa dòng">−</button>`;
+        <button type="button" class="iconbtn" title="Xóa dòng" aria-label="Xóa dòng">−</button>`;
       const [k, v] = el.querySelectorAll('input');
       k.oninput = () => rows[i].key = k.value;
       v.oninput = () => rows[i].value = v.value;

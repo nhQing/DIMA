@@ -115,7 +115,7 @@ Mỗi môi trường có một **tiền tố tag**. Version `1.2.3` với tiền
 **Hai cách đưa version qua các môi trường**, khai ở từng dự án:
 
 - `rebuild` — mỗi môi trường build lại từ mã nguồn với build args của nó. Hợp với ứng dụng nhúng biến lúc build.
-- `promote` — build ở môi trường nguồn, rồi gắn thêm tag cho chính image đó ở các môi trường khác. Digest giữ nguyên, nên bản lên production đúng là bản đã test. Môi trường nào cũng vẫn **build riêng được** khi cần (bản vá chỉ cho production, build args khác nhau…): hộp thoại Build nhắc rằng bản đó sẽ là image mới, khác digest với bản đã test, và nếu version đó đã có bản đẩy lên ở môi trường khác thì có sẵn nút "Promote bản đó thay vì build".
+- `promote` — build ở môi trường nguồn, rồi gắn thêm tag cho chính image đó ở các môi trường khác. Digest giữ nguyên, nên bản lên production đúng là bản đã test. Môi trường nào cũng vẫn **build riêng được** khi cần (bản vá chỉ cho production, build args khác nhau…): nhưng phải tick xác nhận (máy chủ cũng kiểm), vì bản đó là image mới, khác digest với bản đã test — trước đây việc này bị chặn hẳn, và nhờ xác nhận mà nâng cấp lên bản này không biến production thành "một cú bấm". Nếu version đó đã có bản đẩy lên ở môi trường khác thì có sẵn nút "Promote bản đó thay vì build".
 
 **Promote và rollback** — cùng một cơ chế. Promote một version cũ lên môi trường đang hỏng chính là rollback. Có `docker buildx` 0.12+ thì tag được gắn thẳng trên registry bằng `imagetools create --prefer-index=false` (không truyền dữ liệu, giữ nguyên manifest — đơn hay đa kiến trúc — nên digest không đổi); không có thì lùi về `pull` → `tag` → `push`. Cờ `--prefer-index=false` là bắt buộc: thiếu nó, imagetools bọc manifest đơn vào một index mới, digest đổi và Harbor không nhận manifest list sẽ trả về `415 Manifest.list is not supported`.
 
@@ -171,14 +171,17 @@ Không có label thời gian: nó làm hai lần build cùng mã nguồn ra hai 
 
 **Container đang chạy** — DIMA đọc `docker ps -a` của máy này và ghép từng container vào bản build nó đang chạy: ô môi trường ghi "▶ N container đang chạy", bảng version có huy hiệu "▶ đang chạy", trang dự án và trang môi trường có danh sách container (tên, trạng thái, cổng). Container được ghép theo tên image lúc chạy (`repo:tag`) hoặc theo digest (`repo@sha256:…`). Khi một lần build sau đã kéo tag sang image khác, docker chỉ còn báo container bằng ID image — DIMA để nó là "không rõ version" chứ không đoán. Danh sách được làm mới mỗi 10 giây; đây chỉ là container trên chính máy đang mở DIMA, không phải trên server.
 
-**Môi trường quan trọng** — tick "Môi trường quan trọng (production)" trong Cài đặt môi trường. Image nên tới đó bằng promote, sau khi đã chạy ở môi trường khác; build thẳng ở đó vẫn làm được nhưng hộp thoại Build bắt tick "Tôi hiểu, vẫn build thẳng lên …" và **máy chủ cũng từ chối** nếu thiếu xác nhận, nên một tab cũ hay một script gọi API không lách được. Promote vào môi trường quan trọng thì không cần xác nhận: bản đó đã chạy ở môi trường nguồn.
+**Môi trường quan trọng** — tick "Môi trường quan trọng (production)" trong Cài đặt môi trường. Image nên tới đó bằng promote, sau khi đã chạy ở môi trường khác; build thẳng ở đó vẫn làm được nhưng hộp thoại Build bắt tick "Tôi hiểu, vẫn build thẳng lên …" và **máy chủ cũng từ chối** nếu thiếu xác nhận, nên một tab cũ hay một script gọi API không lách được. Promote vào môi trường quan trọng thì không cần xác nhận: bản đó đã chạy ở môi trường nguồn. Ở dự án kiểu promote, build ở bất kỳ môi trường nào ngoài môi trường nguồn cũng phải xác nhận như vậy, kể cả khi chưa tick cờ này.
+
+**Version** chỉ được gồm chữ, số và `. _ -`, bắt đầu bằng chữ hoặc số, tối đa 128 ký tự — đúng bộ ký tự docker nhận trong tag. Version nằm trần trong `{ref}`/`{tag}` của lệnh build riêng, nên luật này cũng là thứ chặn một chuỗi kiểu `1.0;calc` biến thành lệnh shell. Tiền tố tag theo cùng bộ ký tự.
 
 **Dọn image cũ** — nút ở trang dự án. Xoá image cũ của dự án **trên máy này** (`docker rmi`, không ép), giữ N bản mới nhất mỗi môi trường. Luôn giữ bản hiện tại của mỗi môi trường, image có container dùng, và tag không phải phiên bản (`latest`, `cache`…). Danh sách được tính lại ngay lúc bấm xoá, nên container vừa chạy sau khi mở hộp thoại tự giữ image của nó lại. Registry không bao giờ bị đụng tới: xoá tag trên đó có thể làm sập một server đang pull nó.
 
 **Đọc từ registry** — nút ở trang dự án. DIMA đọc các tag đang có trên registry, xếp vào môi trường theo tiền tố tag (tiền tố dài nhất thắng, nên `prod-v1.2` về môi trường `prod-v` chứ không về môi trường không tiền tố), và cho ghi những tag chưa có vào lịch sử với nhãn **từ registry**. Digest lấy từ chính registry, nên các bản đó promote được ngay — kể cả bản do CI, máy khác hay người khác đẩy lên.
 
 - Thông tin đăng nhập là cái `docker login` đã lưu (`credsStore`, `credHelpers` hoặc mục `auths` trong `~/.docker/config.json`), DIMA không hỏi mật khẩu.
-- Thử lần lượt API của Harbor 2.x, Harbor 1.x, rồi API chuẩn `/v2/<repo>/tags/list` của mọi registry. Harbor cho cả giờ push; registry khác chỉ cho tag, digest lấy bằng một lệnh HEAD mỗi tag (tối đa 200 tag mới nhất).
+- Thử lần lượt API của Harbor 2.x, Harbor 1.x, rồi API chuẩn `/v2/<repo>/tags/list` của mọi registry. Harbor cho cả giờ push; registry khác chỉ cho tag, digest lấy bằng một lệnh HEAD mỗi tag (tối đa 200 tag mới nhất, 8 lệnh song song), danh sách nhiều trang được đọc hết theo header `Link`. Đăng nhập thành công một lần thì các request sau dùng lại, không mở lại credential helper mỗi lần.
+- Registry không được tin trong việc đặt tên: tag sai bộ ký tự docker bị bỏ hẳn, digest không phải `sha256:` kèm 64 ký tự hex thì không được giữ. Mật khẩu chỉ gửi tới nơi cấp token qua https, và chỉ khi nó là chính host registry hoặc tên miền cha/con của nó (địa chỉ IP phải trùng hẳn).
 - Tag nào lịch sử DIMA ghi một digest mà registry đang giữ digest khác được tô **khác lịch sử**: tag đó đã bị đẩy đè từ nơi khác, và bản đang chạy có thể không phải bản bạn nghĩ.
 - Tag không khớp tiền tố môi trường nào được liệt kê riêng, không bị đoán bừa vào đâu.
 
@@ -188,7 +191,7 @@ Bản build khi thư mục còn sửa dở được tô cam kèm dấu `*`: imag
 
 Quan trọng hơn việc ghi lại: hộp thoại Build **hiện nhánh đang đứng trước khi bạn bấm**, và tô cảnh báo nếu nhánh đó khác với lần build trước của chính môi trường này. Ghi lại chỉ giúp truy ngược sau khi đã lỡ; hiện trước mới ngăn được việc build nhầm.
 
-**Thay đổi so với bản trước** — mở chi tiết một bản build, bấm "Xem các commit": DIMA chạy `git log` từ commit của bản thành công trước đó **trong cùng môi trường** tới commit của bản này, nên thấy ngay version mới mang theo những gì (tối đa 100 commit). Bản promote cùng commit với bản trước thì ghi "cùng mã nguồn". Commit không có trong thư mục (build ở máy khác, nhánh đã xoá) thì DIMA nói ra, chứ không coi là "không có thay đổi" — `git fetch` rồi thử lại.
+**Thay đổi so với bản trước** — mở chi tiết một bản build, bấm "Xem các commit": DIMA chạy `git log` từ commit của bản thành công trước đó **trong cùng môi trường** tới commit của bản này, nên thấy ngay version mới mang theo những gì (tối đa 100 commit). Bản promote cùng commit với bản trước thì ghi "cùng mã nguồn". Bản lùi về commit cũ hơn (rollback, build từ nhánh cũ) thì liệt kê những commit của bản trước **không còn** trong bản này, chứ không báo "không có thay đổi". Commit không có trong thư mục (build ở máy khác, nhánh đã xoá) thì DIMA nói ra, chứ không coi là "không có thay đổi" — `git fetch` rồi thử lại.
 
 Bản promote thừa hưởng nhánh và commit của bản gốc, vì nó ship đúng image đó chứ không build lại. Thư mục không phải git repo, hoặc máy không có `git`, thì phần này im lặng bỏ qua — nó là thông tin thêm, không bao giờ là lý do chặn build.
 
@@ -225,7 +228,7 @@ Lần đầu mở bản 0.2.0, `config.json` cũ được chuyển sang cấu tr
 Toàn bộ mã nằm ngay ở thư mục gốc, một dự án Go duy nhất. Cần Go 1.22 trở lên. Không có dependency ngoài stdlib, nên không cần mạng khi build.
 
 ```bash
-go test ./...              # 159 test
+go test ./...              # 170 test
 go build -o dima .         # build cho máy hiện tại
 ./build.sh                 # build cả 6 nền tảng vào ./dist
 ```

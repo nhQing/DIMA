@@ -27,10 +27,10 @@ func fakeHarbor(t *testing.T) *httptest.Server {
 			return
 		}
 		json.NewEncoder(w).Encode([]map[string]any{
-			{"digest": "sha256:aaa", "push_time": "2026-10-15T09:00:00Z",
+			{"digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "push_time": "2026-10-15T09:00:00Z",
 				"tags": []map[string]any{{"name": "staging-v1.1.1", "push_time": "2026-10-15T09:00:00Z"},
 					{"name": "prod-v1.1.1", "push_time": "2026-10-16T09:00:00Z"}}},
-			{"digest": "sha256:bbb", "push_time": "2026-10-18T09:00:00Z",
+			{"digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "push_time": "2026-10-18T09:00:00Z",
 				"tags": []map[string]any{{"name": "staging-v1.2.0"}, {"name": "latest"}}},
 		})
 	}))
@@ -62,7 +62,7 @@ func TestListTagsFromHarbor(t *testing.T) {
 		got[tg.Tag] = tg
 	}
 	// Hai tag cùng một artifact phải cùng digest: chính là điều promote tạo ra.
-	if got["staging-v1.1.1"].Digest != "sha256:aaa" || got["prod-v1.1.1"].Digest != "sha256:aaa" {
+	if got["staging-v1.1.1"].Digest != "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" || got["prod-v1.1.1"].Digest != "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
 		t.Errorf("digest sai: %+v", got)
 	}
 	// Tag không có giờ push riêng thì lấy giờ push của artifact.
@@ -285,8 +285,8 @@ func TestMatchTagsPicksTheLongestPrefix(t *testing.T) {
 		{ID: "stg", Name: "Staging", TagPrefix: "staging-v"},
 		{ID: "loc", Name: "Cache", TagPrefix: "", IsOnlyLocal: true},
 	}}
-	tags := []RemoteTag{{Tag: "prod-v1.1.1", Digest: "sha256:new"}, {Tag: "staging-v1.2.0"}, {Tag: "1.0.0"}, {Tag: "latest"}, {Tag: "prod-vnext"}}
-	history := []Build{{EnvID: "prd", Tag: "prod-v1.1.1", Status: "success", Digest: "sha256:old"}}
+	tags := []RemoteTag{{Tag: "prod-v1.1.1", Digest: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}, {Tag: "staging-v1.2.0"}, {Tag: "1.0.0"}, {Tag: "latest"}, {Tag: "prod-vnext"}}
+	history := []Build{{EnvID: "prd", Tag: "prod-v1.1.1", Status: "success", Digest: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}}
 	rows, unmatched := matchTags(p, "harbor.tech/mmt/admin", tags, history)
 
 	byTag := map[string]RegistryRow{}
@@ -297,8 +297,8 @@ func TestMatchTagsPicksTheLongestPrefix(t *testing.T) {
 		t.Errorf("prod-v1.1.1 = %+v", byTag["prod-v1.1.1"])
 	}
 	// Lịch sử ghi một digest, registry đang giữ digest khác: tag đã bị đẩy đè.
-	if byTag["prod-v1.1.1"].Drifted != "sha256:old" {
-		t.Errorf("Drifted = %q, muốn sha256:old", byTag["prod-v1.1.1"].Drifted)
+	if byTag["prod-v1.1.1"].Drifted != "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" {
+		t.Errorf("Drifted = %q, muốn sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", byTag["prod-v1.1.1"].Drifted)
 	}
 	if byTag["staging-v1.2.0"].EnvID != "stg" {
 		t.Errorf("staging-v1.2.0 = %+v", byTag["staging-v1.2.0"])
@@ -362,7 +362,7 @@ func TestRegistryImportRecordsPromotableVersions(t *testing.T) {
 		}
 	}
 	// Đủ điều kiện để promote: thành công, đã ở trên registry, có digest của registry.
-	if stg.Kind != KindRegistry || stg.Status != "success" || !stg.Pushed || stg.Digest != "sha256:bbb" {
+	if stg.Kind != KindRegistry || stg.Status != "success" || !stg.Pushed || stg.Digest != "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" {
 		t.Errorf("bản ghi = %+v", stg)
 	}
 	if !stg.StartedAt.Equal(time.Date(2026, 10, 18, 9, 0, 0, 0, time.UTC)) {

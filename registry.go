@@ -2,17 +2,21 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -48,6 +52,28 @@ type registryClient struct {
 	creds credFunc
 	// scheme is https everywhere but in tests.
 	scheme string
+
+	// auth remembers, per registry host, the Authorization header that last
+	// worked, so the next request sends it straight away. Without it every
+	// request — 200 manifest HEADs on a plain registry — would first take a
+	// 401, start the credential helper again and fetch a new token.
+	mu   sync.Mutex
+	auth map[string]string
+}
+
+func (c *registryClient) knownAuth(host string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.auth[host]
+}
+
+func (c *registryClient) rememberAuth(host, header string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.auth == nil {
+		c.auth = map[string]string{}
+	}
+	c.auth[host] = header
 }
 
 func newRegistryClient() *registryClient {
@@ -138,14 +164,23 @@ func dockerCredentials(host string) (string, string, error) {
 
 // credentialHelper asks docker-credential-<name> for a login. A helper that
 // knows nothing about the host answers with an error, which means anonymous.
+//
+// It gets a deadline: a helper can block — pass waiting on a GPG pinentry,
+// docker-credential-desktop waiting on a Docker Desktop still starting — and
+// without one the registry dialog would spin forever.
 func credentialHelper(name, host string) (string, string, error) {
 	bin := "docker-credential-" + name
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 	var out bytes.Buffer
-	cmd := exec.Command(bin, "get")
+	cmd := exec.CommandContext(ctx, bin, "get")
 	hideWindow(cmd)
 	cmd.Stdin = strings.NewReader(host)
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return "", "", fmt.Errorf("%s không trả lời sau 15 giây — kiểm tra Docker Desktop đã chạy xong chưa, rồi thử lại", bin)
+		}
 		if _, lookErr := exec.LookPath(bin); lookErr != nil {
 			return "", "", fmt.Errorf("không tìm thấy %s — docker lưu mật khẩu qua nó, nên hãy kiểm tra Docker còn cài và nằm trong PATH", bin)
 		}
@@ -164,7 +199,11 @@ func credentialHelper(name, host string) (string, string, error) {
 // the Bearer token dance of the distribution spec. Basic credentials are
 // only ever sent once the server has asked for them.
 func (c *registryClient) do(host string, req *http.Request) (*http.Response, error) {
-	resp, err := c.http.Do(req)
+	first := req.Clone(req.Context())
+	if h := c.knownAuth(host); h != "" {
+		first.Header.Set("Authorization", h)
+	}
+	resp, err := c.http.Do(first)
 	if err != nil {
 		return nil, err
 	}
@@ -204,6 +243,9 @@ func (c *registryClient) do(host string, req *http.Request) (*http.Response, err
 		}
 		return nil, fmt.Errorf("%s từ chối thông tin đăng nhập đã lưu — chạy lại `docker login %s`", host, host)
 	}
+	// Only a header that the registry itself just accepted is reused, and
+	// only for this same host.
+	c.rememberAuth(host, retry.Header.Get("Authorization"))
 	return resp, nil
 }
 
@@ -260,14 +302,18 @@ func (c *registryClient) token(host string, params map[string]string, user, secr
 	if !sameSite(ru.Hostname(), registryKey(host)) {
 		user, secret = "", ""
 	}
-	q := url.Values{}
+	// Merged into whatever query the realm already carries
+	// (https://auth.example.com/token?account=x), not appended after a
+	// second "?".
+	q := ru.Query()
 	if s := params["service"]; s != "" {
 		q.Set("service", s)
 	}
 	if s := params["scope"]; s != "" {
 		q.Set("scope", s)
 	}
-	req, err := http.NewRequest(http.MethodGet, realm+"?"+q.Encode(), nil)
+	ru.RawQuery = q.Encode()
+	req, err := http.NewRequest(http.MethodGet, ru.String(), nil)
 	if err != nil {
 		return "", err
 	}
@@ -292,26 +338,28 @@ func (c *registryClient) token(host string, params map[string]string, user, secr
 	return firstNonEmpty(tok.Token, tok.AccessToken), nil
 }
 
-// sameSite reports whether two hosts are the same, or share a parent domain
-// of at least two labels (gitlab.com for registry.gitlab.com). A port on the
-// registry key is ignored.
+// sameSite reports whether a token realm host may receive the registry's
+// password: the same host, or one is a subdomain of the other (gitlab.com
+// for registry.gitlab.com). A port on the registry key is ignored.
+//
+// Not "shares the last two labels": that matched 10.0.0.5 with 192.168.0.5
+// and registry.a.co.uk with evil.co.uk. IP addresses must match exactly, and
+// the shorter name must itself have a dot, so "com" never covers anything.
 func sameSite(a, b string) bool {
 	a, b = strings.ToLower(a), strings.ToLower(b)
-	if h, _, ok := strings.Cut(b, ":"); ok {
+	if h, _, err := net.SplitHostPort(b); err == nil {
 		b = h
 	}
 	if a == b {
 		return true
 	}
-	parent := func(h string) string {
-		parts := strings.Split(h, ".")
-		if len(parts) < 2 {
-			return h
-		}
-		return strings.Join(parts[len(parts)-2:], ".")
+	if net.ParseIP(a) != nil || net.ParseIP(b) != nil {
+		return false
 	}
-	pa := parent(a)
-	return strings.Contains(pa, ".") && pa == parent(b)
+	sub := func(child, parent string) bool {
+		return strings.Contains(parent, ".") && strings.HasSuffix(child, "."+parent)
+	}
+	return sub(a, b) || sub(b, a)
 }
 
 func (c *registryClient) get(host, path string, headers map[string]string, method string) (*http.Response, error) {
@@ -461,36 +509,86 @@ const manifestAccept = "application/vnd.oci.image.index.v1+json, " +
 // tag. The newest tags are the ones anyone promotes.
 const maxDigestLookups = 200
 
+// digestWorkers is how many manifest HEADs run at once.
+const digestWorkers = 8
+
 func (c *registryClient) genericTags(host, name string) ([]RemoteTag, error) {
-	resp, err := c.get(host, "/v2/"+name+"/tags/list?n=10000", map[string]string{"Accept": "application/json"}, http.MethodGet)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("không có repository %s trên %s", name, host)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s trả về HTTP %d cho %s", host, resp.StatusCode, name)
-	}
-	var body struct {
-		Tags []string `json:"tags"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return nil, fmt.Errorf("%s không trả về danh sách tag: %w", host, err)
+	tags := []string{}
+	// A registry may cap n and page the rest behind a Link header
+	// (rel="next"); without following it the list is silently cut short.
+	path := "/v2/" + name + "/tags/list?n=1000"
+	for page := 0; path != "" && page < 50; page++ {
+		resp, err := c.get(host, path, map[string]string{"Accept": "application/json"}, http.MethodGet)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode == http.StatusNotFound {
+			resp.Body.Close()
+			return nil, fmt.Errorf("không có repository %s trên %s", name, host)
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return nil, fmt.Errorf("%s trả về HTTP %d cho %s", host, resp.StatusCode, name)
+		}
+		var body struct {
+			Tags []string `json:"tags"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&body)
+		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("%s không trả về danh sách tag: %w", host, err)
+		}
+		tags = append(tags, body.Tags...)
+		path = nextLink(resp.Header.Get("Link"))
 	}
 	// The tags API gives no dates, so the newest-first order is a guess: a
 	// tag sorted later by name is usually a later version.
-	sort.Sort(sort.Reverse(sort.StringSlice(body.Tags)))
-	out := make([]RemoteTag, 0, len(body.Tags))
-	for i, t := range body.Tags {
-		rt := RemoteTag{Tag: t}
-		if i < maxDigestLookups {
-			rt.Digest = c.headDigest(host, name, t)
-		}
-		out = append(out, rt)
+	sort.Sort(sort.Reverse(sort.StringSlice(tags)))
+	out := make([]RemoteTag, len(tags))
+	for i, t := range tags {
+		out[i] = RemoteTag{Tag: t}
 	}
+	// One HEAD per tag for the digest, a few at a time: one after another,
+	// 200 of them made the dialog take minutes.
+	n := min(len(out), maxDigestLookups)
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	for w := 0; w < digestWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				out[i].Digest = c.headDigest(host, name, out[i].Tag)
+			}
+		}()
+	}
+	for i := 0; i < n; i++ {
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
 	return out, nil
+}
+
+// nextLink reads the path of a `Link: </v2/x/tags/list?last=a&n=1000>;
+// rel="next"` header, or "" when there is no next page. Only a path on the
+// same host is followed.
+func nextLink(h string) string {
+	for _, part := range strings.Split(h, ",") {
+		if !strings.Contains(part, `rel="next"`) {
+			continue
+		}
+		start, end := strings.Index(part, "<"), strings.Index(part, ">")
+		if start < 0 || end <= start {
+			return ""
+		}
+		target := part[start+1 : end]
+		if !strings.HasPrefix(target, "/") {
+			return ""
+		}
+		return target
+	}
+	return ""
 }
 
 func (c *registryClient) headDigest(host, name, tag string) string {
@@ -555,6 +653,16 @@ func matchTags(p Project, repo string, tags []RemoteTag, history []Build) ([]Reg
 	}
 	rows, unmatched := []RegistryRow{}, []RemoteTag{}
 	for _, t := range tags {
+		// The registry is not trusted to name things: a tag that breaks
+		// docker's tag grammar is dropped outright — imported, it would become
+		// a version that lands unquoted in {ref} inside a shell command — and a
+		// digest that is not a sha256 is not kept for promote to point at.
+		if !tagRe.MatchString(t.Tag) {
+			continue
+		}
+		if !digestRe.MatchString(t.Digest) {
+			t.Digest = ""
+		}
 		best := envForTag(envs, t.Tag)
 		if best == nil {
 			unmatched = append(unmatched, t)
@@ -578,6 +686,8 @@ func matchTags(p Project, repo string, tags []RemoteTag, history []Build) ([]Reg
 	}
 	return rows, unmatched
 }
+
+var digestRe = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 
 // envForTag finds the environment a tag belongs to: the one with the longest
 // tag prefix the tag starts with, where what follows the prefix is a version

@@ -219,13 +219,22 @@ func TestPromoteProjectBuildsInEveryEnv(t *testing.T) {
 	if err := store.SaveConfig(Config{Projects: []Project{p}}); err != nil {
 		t.Fatal(err)
 	}
-	_, body := postJSON(t, srv.URL+"/api/build/preview", `{"envId":"prd","version":"1.0.0"}`)
-	if body["outsideSource"] != true {
-		t.Errorf("outsideSource = %v, muốn true cho Production", body["outsideSource"])
+	_, preview := postJSON(t, srv.URL+"/api/build/preview", `{"envId":"prd","version":"1.0.0"}`)
+	if preview["outsideSource"] != true {
+		t.Errorf("outsideSource = %v, muốn true cho Production", preview["outsideSource"])
+	}
+	// Build được — nhưng phải xác nhận, vì trước đây việc này bị chặn hẳn và
+	// cấu hình cũ chưa môi trường nào có cờ "quan trọng".
+	if preview["needsConfirm"] != true {
+		t.Errorf("needsConfirm = %v, build ngoài nguồn phải xác nhận", preview["needsConfirm"])
 	}
 	code, body := postJSON(t, srv.URL+"/api/build", `{"envId":"prd","version":"1.0.0"}`)
+	if code != http.StatusConflict {
+		t.Fatalf("status = %d, body = %v, muốn 409 khi chưa xác nhận", code, body)
+	}
+	code, body = postJSON(t, srv.URL+"/api/build", `{"envId":"prd","version":"1.0.0","confirm":true}`)
 	if code != http.StatusOK {
-		t.Fatalf("status = %d, body = %v, muốn build được ở Production", code, body)
+		t.Fatalf("status = %d, body = %v, có xác nhận thì phải build được ở Production", code, body)
 	}
 	waitBuilds(t, store)
 }

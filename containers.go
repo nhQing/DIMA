@@ -109,22 +109,37 @@ func matchContainers(cfg Config, history []Build, list []Container) []Container 
 // Containers is matchContainers over a fresh-enough docker ps. The state
 // endpoint is polled every five seconds by every open window; ten seconds of
 // caching keeps that from spawning a docker process per poll.
+//
+// Two more things keep the poll from stalling. docker ps is not run at all
+// while docker itself is known to be down — it would sit out its timeout on
+// every poll. And only one refresh runs at a time: a poll that arrives while
+// one is in flight is answered from the list it is about to replace, rather
+// than starting a second docker process and waiting on it.
 func (s *Store) Containers() []Container {
 	const freshFor = 10 * time.Second
-	s.mu.RLock()
-	if time.Since(s.containersAt) < freshFor && s.containers != nil {
-		list := s.containers
-		s.mu.RUnlock()
-		return matchContainers(s.Config(), s.Builds(), list)
+	s.mu.Lock()
+	list := s.containers
+	stale := list == nil || time.Since(s.containersAt) >= freshFor
+	refresh := stale && !s.containersBusy
+	if refresh {
+		s.containersBusy = true
 	}
-	s.mu.RUnlock()
+	s.mu.Unlock()
 
-	list, err := readContainers(s.Config().DockerBin)
-	if err != nil {
+	if refresh {
+		fresh := []Container{}
+		if _, ok := s.DockerVersion(); ok {
+			if got, err := readContainers(s.Config().DockerBin); err == nil {
+				fresh = got
+			}
+		}
+		s.mu.Lock()
+		s.containers, s.containersAt, s.containersBusy = fresh, time.Now(), false
+		s.mu.Unlock()
+		list = fresh
+	}
+	if list == nil {
 		list = []Container{}
 	}
-	s.mu.Lock()
-	s.containers, s.containersAt = list, time.Now()
-	s.mu.Unlock()
 	return matchContainers(s.Config(), s.Builds(), list)
 }

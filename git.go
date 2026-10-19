@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -81,6 +82,39 @@ func CommitsBetween(dir, from, to string) ([]Commit, error) {
 		}
 	}
 	return list, nil
+}
+
+// gitCache backs ReadGitCached.
+var gitCache struct {
+	sync.Mutex
+	m map[string]gitCacheEntry
+}
+
+type gitCacheEntry struct {
+	info GitInfo
+	at   time.Time
+}
+
+// ReadGitCached is ReadGit, remembered for maxAge. The build dialog previews
+// the command on every pause in typing, and ReadGit starts three git
+// processes each time; on a big repository that made the preview trail the
+// keyboard. A few seconds of staleness only touches the labels shown in the
+// preview — the build itself always reads git fresh.
+func ReadGitCached(dir string, maxAge time.Duration) GitInfo {
+	gitCache.Lock()
+	e, ok := gitCache.m[dir]
+	gitCache.Unlock()
+	if ok && time.Since(e.at) < maxAge {
+		return e.info
+	}
+	info := ReadGit(dir)
+	gitCache.Lock()
+	if gitCache.m == nil {
+		gitCache.m = map[string]gitCacheEntry{}
+	}
+	gitCache.m[dir] = gitCacheEntry{info: info, at: time.Now()}
+	gitCache.Unlock()
+	return info
 }
 
 // ReadGit inspects a build context folder.

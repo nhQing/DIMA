@@ -41,31 +41,31 @@
       "key": "rail",
       "name": "Cột trái",
       "fn": "renderRail()",
-      "file": "ui:952",
+      "file": "ui:955",
       "desc": "Luôn hiện ở mọi màn hình: nhóm → dự án → môi trường, kèm các nút tạo và quét.",
       "nav": [
         {
           "btn": "Tổng quan",
           "sel": "[data-overview]",
-          "file": "ui:978",
+          "file": "ui:981",
           "note": "về màn hình Tổng quan"
         },
         {
           "btn": "tên nhóm",
           "sel": "[data-grp]",
-          "file": "ui:979",
+          "file": "ui:982",
           "note": "gấp/mở nhóm, trạng thái được nhớ lại"
         },
         {
           "btn": "tên dự án",
           "sel": "[data-proj]",
-          "file": "ui:980",
+          "file": "ui:983",
           "note": "sang màn hình Dự án"
         },
         {
           "btn": "tên môi trường",
           "sel": "[data-env]",
-          "file": "ui:981",
+          "file": "ui:984",
           "note": "sang màn hình Môi trường"
         }
       ]
@@ -74,13 +74,13 @@
       "key": "overview",
       "name": "Tổng quan",
       "fn": "renderOverview()",
-      "file": "ui:1015",
+      "file": "ui:1018",
       "desc": "Bản nào đang nằm ở môi trường nào, gom theo dự án, kèm digest rút gọn và mức tụt lại sau bản mới nhất.",
       "nav": [
         {
           "btn": "ô môi trường",
           "sel": "[data-goenv]",
-          "file": "ui:1052",
+          "file": "ui:1055",
           "note": "sang màn hình Môi trường"
         }
       ]
@@ -89,13 +89,13 @@
       "key": "project",
       "name": "Màn hình Dự án",
       "fn": "renderProject()",
-      "file": "ui:1080",
+      "file": "ui:1083",
       "desc": "Các ô môi trường, bảng version × môi trường, container trên máy, và các nút Build, Đọc từ registry, Dọn image cũ.",
       "nav": [
         {
           "btn": "ô môi trường",
           "sel": "[data-goenv]",
-          "file": "ui:1052",
+          "file": "ui:1055",
           "note": "sang màn hình Môi trường"
         }
       ]
@@ -104,13 +104,13 @@
       "key": "env",
       "name": "Màn hình Môi trường",
       "fn": "renderEnv()",
-      "file": "ui:1312",
+      "file": "ui:1315",
       "desc": "Ref hiện tại của môi trường và danh sách các bản đã về đây.",
       "nav": [
         {
           "btn": "thẻ build",
           "sel": "[data-b]",
-          "file": "ui:1368",
+          "file": "ui:1373",
           "note": "mở/đóng thẻ chi tiết"
         }
       ]
@@ -119,14 +119,14 @@
       "key": "detail",
       "name": "Thẻ build mở rộng",
       "fn": "detailHTML()",
-      "file": "ui:1451",
+      "file": "ui:1459",
       "within": "env",
       "desc": "Nằm trong màn hình Môi trường, hiện ra khi bấm một thẻ build: lệnh pull, tag, digest, nhật ký.",
       "nav": [
         {
           "btn": "Chép",
           "sel": "[data-copy]",
-          "file": "ui:1377",
+          "file": "ui:1382",
           "note": "chép lệnh pull / tag / digest — nút đổi thành \"✓ Đã chép\", chép không được thì báo lỗi"
         }
       ]
@@ -180,32 +180,32 @@
         },
         {
           "fn": "OpenStore()",
-          "file": "store.go:455",
+          "file": "store.go:456",
           "lane": "store",
           "desc": "Tạo ~/.dima, ~/.dima/versions, ~/.dima/logs rồi nạp cấu hình và lịch sử.",
           "edge": "cổng trống"
         },
         {
           "fn": "loadConfig()",
-          "file": "store.go:802",
+          "file": "store.go:803",
           "lane": "store",
           "desc": "Đọc config.json. Chưa có file thì ghi cấu hình mặc định ra đĩa."
         },
         {
           "fn": "decodeConfig()",
-          "file": "store.go:491",
+          "file": "store.go:492",
           "lane": "store",
           "desc": "Bỏ BOM, dò schemaVersion. Thấy schema v1 thì migrate sang cấu trúc dự án/môi trường."
         },
         {
           "fn": "loadHistory()",
-          "file": "store.go:998",
+          "file": "store.go:999",
           "lane": "store",
           "desc": "Đọc history.json. Bản build còn kẹt trạng thái \"running\" từ lần thoát trước được chuyển thành canceled."
         },
         {
           "fn": "api.routes()",
-          "file": "api.go:32",
+          "file": "api.go:33",
           "lane": "http",
           "desc": "Đăng ký toàn bộ endpoint /api/* vào ServeMux."
         },
@@ -327,7 +327,7 @@
         },
         {
           "fn": "HasRunningBuild()",
-          "file": "store.go:1172",
+          "file": "store.go:1173",
           "lane": "store",
           "desc": "Còn build nào đang chạy không? Còn thì in thông báo và để ứng dụng sống tiếp.",
           "edge": "đủ lâu"
@@ -350,24 +350,24 @@
           "screen": "app",
           "btn": "Tự chạy mỗi 5 giây",
           "sel": "setInterval",
-          "file": "ui:2764"
+          "file": "ui:2791"
         },
         {
           "screen": "app",
           "btn": "Sau mọi thao tác ghi dữ liệu",
-          "file": "ui:825"
+          "file": "ui:828"
         }
       ],
       "steps": [
         {
           "fn": "refresh()",
-          "file": "ui:801",
+          "file": "ui:804",
           "lane": "ui",
           "desc": "Hàm đồng bộ trung tâm của giao diện. Vòng lặp 5 giây bỏ qua khi đang mở hộp thoại."
         },
         {
           "fn": "api()",
-          "file": "ui:550",
+          "file": "ui:553",
           "lane": "ui",
           "desc": "fetch JSON, gặp lỗi thì ném ra message của server."
         },
@@ -379,19 +379,19 @@
         },
         {
           "fn": "api.state()",
-          "file": "api.go:115",
+          "file": "api.go:123",
           "lane": "http",
           "desc": "Gom mọi thứ giao diện cần vào một response duy nhất."
         },
         {
           "fn": "Store.Config()",
-          "file": "store.go:895",
+          "file": "store.go:896",
           "lane": "store",
           "desc": "Đọc cấu hình dưới RLock."
         },
         {
           "fn": "Store.Builds()",
-          "file": "store.go:1064",
+          "file": "store.go:1065",
           "lane": "store",
           "desc": "Trả bản sao lịch sử build, mới nhất trước."
         },
@@ -409,25 +409,25 @@
         },
         {
           "fn": "writeJSON()",
-          "file": "api.go:60",
+          "file": "api.go:61",
           "lane": "http",
           "desc": "Đóng gói config + builds + trạng thái docker."
         },
         {
           "fn": "render()",
-          "file": "ui:831",
+          "file": "ui:834",
           "lane": "ui",
           "desc": "Selection trỏ vào dự án/môi trường đã bị xóa thì lùi về Tổng quan."
         },
         {
           "fn": "renderRail()",
-          "file": "ui:952",
+          "file": "ui:955",
           "lane": "ui",
           "desc": "Cột trái: nhóm gấp/mở được, dự án và môi trường bên trong."
         },
         {
           "fn": "renderPane()",
-          "file": "ui:985",
+          "file": "ui:988",
           "lane": "ui",
           "desc": "Khung phải: Tổng quan, màn hình Dự án, hoặc màn hình Môi trường."
         }
@@ -443,49 +443,49 @@
           "screen": "project",
           "btn": "Cài đặt dự án",
           "sel": "#doSettings",
-          "file": "ui:1130"
+          "file": "ui:1133"
         },
         {
           "screen": "env",
           "btn": "Cài đặt môi trường",
           "sel": "#doEnvSettings",
-          "file": "ui:1342"
+          "file": "ui:1345"
         },
         {
           "screen": "env",
           "btn": "Cài đặt dự án",
           "sel": "#doProjSettings",
-          "file": "ui:1343"
+          "file": "ui:1346"
         }
       ],
       "steps": [
         {
           "fn": "projectDialog()",
-          "file": "ui:2207",
+          "file": "ui:2234",
           "lane": "ui",
           "desc": "Form dự án: registry, image, Dockerfile, platform, target, cờ thêm, build args, labels, chế độ phát hành."
         },
         {
           "fn": "envDialog()",
-          "file": "ui:2333",
+          "file": "ui:2360",
           "lane": "ui",
           "desc": "Form môi trường: chỉ khai phần khác dự án, ô trống hiện sẵn \"kế thừa: …\"."
         },
         {
           "fn": "cloneConfig()",
-          "file": "ui:828",
+          "file": "ui:831",
           "lane": "ui",
           "desc": "Deep-copy cấu hình hiện tại để sửa mà không đụng state đang hiển thị."
         },
         {
           "fn": "saveConfig()",
-          "file": "ui:821",
+          "file": "ui:824",
           "lane": "ui",
           "desc": "PUT toàn bộ config lên server."
         },
         {
           "fn": "api.saveConfig()",
-          "file": "api.go:130",
+          "file": "api.go:138",
           "lane": "http",
           "desc": "Bắt buộc: dự án có tên, môi trường có tên, image hiệu lực khác rỗng, tiền tố tag không chứa khoảng trắng hay : / \\."
         },
@@ -497,31 +497,31 @@
         },
         {
           "fn": "Store.SaveConfig()",
-          "file": "store.go:934",
+          "file": "store.go:935",
           "lane": "store",
           "desc": "Ghi dưới Lock."
         },
         {
           "fn": "snapshotConfigLocked()",
-          "file": "store.go:903",
+          "file": "store.go:904",
           "lane": "store",
           "desc": "Chép config.json hiện tại sang ~/.dima/versions/config-<thời gian>.json trước khi đè."
         },
         {
           "fn": "normalise()",
-          "file": "store.go:684",
+          "file": "store.go:685",
           "lane": "store",
           "desc": "Cấp id cho dự án/môi trường mới, dọn khoảng trắng, chốt các giá trị mặc định."
         },
         {
           "fn": "writeConfigFile()",
-          "file": "store.go:887",
+          "file": "store.go:888",
           "lane": "store",
           "desc": "MarshalIndent rồi ghi đè config.json."
         },
         {
           "fn": "refresh()",
-          "file": "ui:801",
+          "file": "ui:804",
           "lane": "ui",
           "desc": "Kéo lại state đã normalise để giao diện thấy đúng id vừa được cấp."
         }
@@ -545,31 +545,31 @@
           "screen": "project",
           "btn": "Cài đặt dự án › Chọn thư mục",
           "sel": "#pick-ctx",
-          "file": "ui:2282"
+          "file": "ui:2309"
         },
         {
           "screen": "env",
           "btn": "Cài đặt môi trường › Chọn thư mục",
           "sel": "#pick-ctx",
-          "file": "ui:2282"
+          "file": "ui:2309"
         }
       ],
       "steps": [
         {
           "fn": "mountPath()",
-          "file": "ui:2088",
+          "file": "ui:2115",
           "lane": "ui",
           "desc": "Gắn ô đường dẫn: nút Chọn thư mục, debounce 350ms khi gõ tay, dòng trạng thái ngay dưới."
         },
         {
           "fn": "POST /api/pick-folder",
-          "file": "ui:2135",
+          "file": "ui:2162",
           "lane": "ui",
           "desc": "Trang web không bao giờ được biết đường dẫn thật, nên phải nhờ tiến trình DIMA mở hộp thoại."
         },
         {
           "fn": "api.pickFolder()",
-          "file": "api.go:195",
+          "file": "api.go:203",
           "lane": "http",
           "desc": "Gọi hộp thoại chọn thư mục của hệ điều hành."
         },
@@ -581,13 +581,13 @@
         },
         {
           "fn": "inspectFolder()",
-          "file": "api.go:235",
+          "file": "api.go:243",
           "lane": "http",
           "desc": "Thư mục có tồn tại không, có đúng Dockerfile đang khai không, đang có sẵn những Dockerfile nào."
         },
         {
           "fn": "mountPath › dòng báo dưới ô",
-          "file": "ui:2091",
+          "file": "ui:2118",
           "lane": "ui",
           "desc": "Hiện xanh \"đã thấy Dockerfile\", hoặc đỏ kèm danh sách Dockerfile đang có trong thư mục."
         }
@@ -611,67 +611,67 @@
           "screen": "rail",
           "btn": "Quét thư mục…",
           "sel": "#scanFolders",
-          "file": "ui:2739"
+          "file": "ui:2766"
         }
       ],
       "steps": [
         {
           "fn": "importDialog()",
-          "file": "ui:2506",
+          "file": "ui:2533",
           "lane": "ui",
           "desc": "Chọn một thư mục cha, một nhóm và một registry áp cho tất cả."
         },
         {
           "fn": "scan()",
-          "file": "ui:2566",
+          "file": "ui:2593",
           "lane": "ui",
           "desc": "Chạy khi chọn xong thư mục, hoặc 500ms sau lần gõ cuối."
         },
         {
           "fn": "api.scanFolder()",
-          "file": "api.go:346",
+          "file": "api.go:354",
           "lane": "http",
           "desc": "Đi sâu tối đa ba tầng từ thư mục cha. Thư mục cha tự nó cũng có thể là một dự án."
         },
         {
           "fn": "skipDir()",
-          "file": "api.go:395",
+          "file": "api.go:403",
           "lane": "http",
           "desc": "Bỏ qua node_modules, vendor, dist, build, target, bin, obj, .git và mọi thư mục ẩn."
         },
         {
           "fn": "dockerfileIn()",
-          "file": "api.go:405",
+          "file": "api.go:413",
           "lane": "http",
           "desc": "Thấy Dockerfile là ghi nhận một dự án và dừng, không chui tiếp vào trong nó."
         },
         {
           "fn": "drawHits()",
-          "file": "ui:2542",
+          "file": "ui:2569",
           "lane": "ui",
           "desc": "Danh sách tích chọn. Thư mục đã có dự án trỏ tới hiện \"đã có\" và không tích được → quét lại nhiều lần cũng không tạo trùng."
         },
         {
           "fn": "cloneConfig()",
-          "file": "ui:828",
+          "file": "ui:831",
           "lane": "ui",
           "desc": "Mỗi mục được chọn thành một dự án rebuild, kèm sẵn hai môi trường Staging và Production."
         },
         {
           "fn": "saveConfig()",
-          "file": "ui:821",
+          "file": "ui:824",
           "lane": "ui",
           "desc": "PUT /api/config một lần cho cả lô."
         },
         {
           "fn": "Store.SaveConfig()",
-          "file": "store.go:934",
+          "file": "store.go:935",
           "lane": "store",
           "desc": "Sao lưu bản cũ, normalise cấp id, ghi file."
         },
         {
           "fn": "refresh()",
-          "file": "ui:801",
+          "file": "ui:804",
           "lane": "ui",
           "desc": "Về Tổng quan, thấy ngay các dự án vừa thêm."
         }
@@ -687,13 +687,13 @@
           "screen": "rail",
           "btn": "Quét image…",
           "sel": "#scanImages",
-          "file": "ui:2740"
+          "file": "ui:2767"
         }
       ],
       "steps": [
         {
           "fn": "imagesDialog()",
-          "file": "ui:2629",
+          "file": "ui:2656",
           "lane": "ui",
           "desc": "Mỗi repository thành một dự án; các tag của nó thành phiên bản hiện luôn trong bảng version."
         },
@@ -729,19 +729,19 @@
         },
         {
           "fn": "api.listImages()",
-          "file": "api.go:427",
+          "file": "api.go:435",
           "lane": "http",
           "desc": "Đánh dấu repository nào đã có dự án trỏ tới để màn hình làm mờ, không import trùng."
         },
         {
           "fn": "imagesDialog › vẽ danh sách",
-          "file": "ui:2662",
+          "file": "ui:2696",
           "lane": "ui",
           "desc": "Image của registry riêng được tích sẵn; image kéo từ Docker Hub ẩn đi cho tới khi tích \"Hiện cả image tải về từ Docker Hub\"."
         },
         {
           "fn": "api.importImages()",
-          "file": "api.go:458",
+          "file": "api.go:466",
           "lane": "http",
           "desc": "Biến các repository đã chọn thành dự án."
         },
@@ -759,19 +759,19 @@
         },
         {
           "fn": "recordExistingTags()",
-          "file": "api.go:530",
+          "file": "api.go:538",
           "lane": "http",
           "desc": "Mỗi tag là phiên bản được ghi thành một mục lịch sử kind=import, đề ngày theo lúc image được tạo — nhờ vậy bảng version xếp đúng thứ tự."
         },
         {
           "fn": "Store.SaveConfig()",
-          "file": "store.go:934",
+          "file": "store.go:935",
           "lane": "store",
           "desc": "Sao lưu bản cũ rồi ghi cấu hình có các dự án mới."
         },
         {
           "fn": "refresh()",
-          "file": "ui:801",
+          "file": "ui:804",
           "lane": "ui",
           "desc": "Toast báo đã thêm bao nhiêu dự án, ghi nhận bao nhiêu phiên bản."
         }
@@ -787,43 +787,43 @@
           "screen": "rail",
           "btn": "+ Tạo mới",
           "sel": "#addProject",
-          "file": "ui:2742"
+          "file": "ui:2769"
         },
         {
           "screen": "rail",
           "btn": "+ cạnh dự án",
           "sel": "[data-addenv]",
-          "file": "ui:982"
+          "file": "ui:985"
         }
       ],
       "steps": [
         {
           "fn": "#addProject.onclick",
-          "file": "ui:2742",
+          "file": "ui:2769",
           "lane": "ui",
           "desc": "Đẩy một dự án mẫu (image my-api, một môi trường Staging) vào bản sao cấu hình."
         },
         {
           "fn": "addEnv()",
-          "file": "ui:2723",
+          "file": "ui:2750",
           "lane": "ui",
           "desc": "Hoặc: thêm một môi trường trống vào dự án đang chọn."
         },
         {
           "fn": "saveConfig()",
-          "file": "ui:821",
+          "file": "ui:824",
           "lane": "ui",
           "desc": "Lưu ngay, vì id do server cấp chứ không do giao diện tự đặt."
         },
         {
           "fn": "normalise()",
-          "file": "store.go:684",
+          "file": "store.go:685",
           "lane": "store",
           "desc": "Mọi id rỗng được cấp một id mới, ổn định."
         },
         {
           "fn": "projectDialog()",
-          "file": "ui:2207",
+          "file": "ui:2234",
           "lane": "ui",
           "desc": "Mở form của bản ghi vừa được tạo để điền tiếp."
         }
@@ -839,67 +839,67 @@
           "screen": "overview",
           "btn": "Lịch sử cài đặt",
           "sel": "#doVersions",
-          "file": "ui:1051"
+          "file": "ui:1054"
         },
         {
           "screen": "project",
           "btn": "Lịch sử cài đặt",
           "sel": "#doVersions",
-          "file": "ui:1051"
+          "file": "ui:1054"
         }
       ],
       "steps": [
         {
           "fn": "versionsDialog()",
-          "file": "ui:2469",
+          "file": "ui:2496",
           "lane": "ui",
           "desc": "Liệt kê các bản config cũ theo thời gian, kèm nút Xem và Khôi phục."
         },
         {
           "fn": "api.listVersions()",
-          "file": "api.go:626",
+          "file": "api.go:634",
           "lane": "http",
           "desc": "GET /api/config/versions"
         },
         {
           "fn": "Store.Snapshots()",
-          "file": "store.go:946",
+          "file": "store.go:947",
           "lane": "store",
           "desc": "Chỉ nhận file config-*.json trong ~/.dima/versions; file sao lưu history bị loại ra."
         },
         {
           "fn": "api.readVersion()",
-          "file": "api.go:630",
+          "file": "api.go:638",
           "lane": "http",
           "desc": "Nút \"Xem\": trả nguyên văn JSON của bản lưu."
         },
         {
           "fn": "api.restoreVersion()",
-          "file": "api.go:640",
+          "file": "api.go:648",
           "lane": "http",
           "desc": "Nút \"Khôi phục\", sau khi người dùng xác nhận."
         },
         {
           "fn": "RestoreSnapshot()",
-          "file": "store.go:981",
+          "file": "store.go:982",
           "lane": "store",
           "desc": "Tên file phải là base name thuần — chặn đường dẫn leo ra ngoài thư mục versions."
         },
         {
           "fn": "decodeConfig()",
-          "file": "store.go:491",
+          "file": "store.go:492",
           "lane": "store",
           "desc": "Bản lưu hỏng thì báo lỗi, không đụng tới cấu hình đang chạy."
         },
         {
           "fn": "Store.SaveConfig()",
-          "file": "store.go:934",
+          "file": "store.go:935",
           "lane": "store",
           "desc": "Cấu hình hiện tại được sao lưu trước khi bị thay — khôi phục cũng hoàn tác được."
         },
         {
           "fn": "refresh()",
-          "file": "ui:801",
+          "file": "ui:804",
           "lane": "ui",
           "desc": "Giao diện vẽ lại theo cấu hình vừa khôi phục."
         }
@@ -914,55 +914,55 @@
         {
           "screen": "app",
           "btn": "Mở lần đầu sau khi nâng cấp",
-          "file": "store.go:802"
+          "file": "store.go:803"
         }
       ],
       "steps": [
         {
           "fn": "loadConfig()",
-          "file": "store.go:802",
+          "file": "store.go:803",
           "lane": "store",
           "desc": "Đọc config.json có sẵn của bản cũ."
         },
         {
           "fn": "decodeConfig()",
-          "file": "store.go:491",
+          "file": "store.go:492",
           "lane": "store",
           "desc": "Dò schema: không có mảng projects mà có environments → đây là schema v1."
         },
         {
           "fn": "migrateV1()",
-          "file": "store.go:616",
+          "file": "store.go:617",
           "lane": "store",
           "desc": "Gom toàn bộ môi trường cũ vào một dự án tên \"Dự án của tôi\", chế độ rebuild — đúng hành vi cũ."
         },
         {
           "fn": "liftCommon()",
-          "file": "store.go:643",
+          "file": "store.go:644",
           "lane": "store",
           "desc": "Cài đặt nào mọi môi trường đều giống nhau thì nâng lên cấp dự án và xóa ở môi trường. Giá trị hiệu lực không đổi."
         },
         {
           "fn": "normalise()",
-          "file": "store.go:684",
+          "file": "store.go:685",
           "lane": "store",
           "desc": "Cấp id, dọn dữ liệu."
         },
         {
           "fn": "snapshotConfigLocked()",
-          "file": "store.go:903",
+          "file": "store.go:904",
           "lane": "store",
           "desc": "Bản cũ được cất vào versions/ TRƯỚC khi ghi đè — khôi phục lại được bất cứ lúc nào."
         },
         {
           "fn": "writeConfigFile()",
-          "file": "store.go:887",
+          "file": "store.go:888",
           "lane": "store",
           "desc": "Ghi cấu trúc mới ra đĩa."
         },
         {
           "fn": "migrateHistory()",
-          "file": "store.go:1026",
+          "file": "store.go:1027",
           "lane": "store",
           "desc": "Lịch sử build cũ được gắn version (lấy chính tag cũ) và gắn vào dự án."
         }
@@ -978,37 +978,37 @@
           "screen": "project",
           "btn": "Build",
           "sel": "#doBuild",
-          "file": "ui:1124"
+          "file": "ui:1127"
         },
         {
           "screen": "project",
           "btn": "Build — ô trong bảng version",
           "sel": "[data-buildver]",
-          "file": "ui:1305"
+          "file": "ui:1308"
         },
         {
           "screen": "env",
           "btn": "Build",
           "sel": "#doBuild",
-          "file": "ui:1340"
+          "file": "ui:1343"
         }
       ],
       "steps": [
         {
           "fn": "buildDialog()",
-          "file": "ui:1643",
+          "file": "ui:1669",
           "lane": "ui",
           "desc": "Version điền sẵn là bản lần trước của CHÍNH môi trường này; gợi ý patch/minor tính từ số đó, cộng \"bản mới nhất của dự án\" nếu môi trường chưa có."
         },
         {
           "fn": "POST /api/build",
-          "file": "ui:1794",
+          "file": "ui:1821",
           "lane": "ui",
           "desc": "{ envId, version, push, params, confirm } — params là trạng thái từng ô trong bảng tham số."
         },
         {
           "fn": "api.startBuild()",
-          "file": "api.go:649",
+          "file": "api.go:657",
           "lane": "http",
           "desc": "Cổng vào phía server. Không còn chặn theo chế độ promote: môi trường nào cũng build được."
         },
@@ -1020,15 +1020,15 @@
         },
         {
           "fn": "checkBuildable()",
-          "file": "api.go:590",
+          "file": "api.go:598",
           "lane": "http",
           "desc": "Thư mục mã nguồn có thật, có Dockerfile (hoặc có lệnh build riêng) — chặn trước khi docker fail ở một thư mục vu vơ."
         },
         {
           "fn": "checkVersion()",
-          "file": "api.go:74",
+          "file": "api.go:82",
           "lane": "http",
-          "desc": "Version không rỗng, không chứa khoảng trắng hay : / \\ — những ký tự docker không nhận trong tag."
+          "desc": "Version phải theo đúng bộ ký tự docker nhận trong tag (chữ, số, . _ -). Nó nằm trần trong {ref} của lệnh shell, và giờ có thể đến từ registry — nên đây cũng là chốt chặn lệnh chèn."
         },
         {
           "fn": "planBuild()",
@@ -1037,10 +1037,10 @@
           "desc": "Dựng câu lệnh bằng đúng hàm mà hộp thoại đã xem trước. Tham số bắt buộc còn trống thì từ chối, chưa chạy gì."
         },
         {
-          "fn": "env.Protected && !req.Confirm",
-          "file": "api.go:691",
+          "fn": "confirmReason()",
+          "file": "api.go:724",
           "lane": "http",
-          "desc": "Môi trường quan trọng: build thẳng phải có xác nhận. Máy chủ tự kiểm, không tin hộp thoại — một tab cũ hay một script không lách được."
+          "desc": "Cần tick xác nhận khi môi trường được đánh dấu quan trọng, hoặc khi dự án promote mà build ngoài môi trường nguồn. Máy chủ tự kiểm, không tin hộp thoại — một tab cũ hay một script không lách được."
         },
         {
           "fn": "Store.Start()",
@@ -1050,7 +1050,7 @@
         },
         {
           "fn": "ReadGit()",
-          "file": "git.go:91",
+          "file": "git.go:125",
           "lane": "runner",
           "desc": "Nhánh, commit và việc thư mục còn sửa dở — ghi vào bản build và vào label."
         },
@@ -1068,13 +1068,13 @@
         },
         {
           "fn": "Store.addBuild()",
-          "file": "store.go:1084",
+          "file": "store.go:1085",
           "lane": "store",
           "desc": "Ghi bản build vào history.json."
         },
         {
           "fn": "Store.rememberBuild()",
-          "file": "store.go:1127",
+          "file": "store.go:1128",
           "lane": "store",
           "desc": "Nhớ version và giá trị tham số theo từng môi trường, để lần sau điền sẵn. Sửa trên bản sao để không ghi chồng lên cấu hình các request khác đang đọc."
         },
@@ -1110,7 +1110,7 @@
         },
         {
           "fn": "loadLog()",
-          "file": "ui:1547",
+          "file": "ui:1555",
           "lane": "ui",
           "desc": "Giao diện mở thẻ build vừa tạo và bắt đầu poll log."
         }
@@ -1146,19 +1146,19 @@
           "screen": "env",
           "btn": "thẻ build — mở ra",
           "sel": "[data-b]",
-          "file": "ui:1368"
+          "file": "ui:1373"
         }
       ],
       "steps": [
         {
           "fn": "loadLog()",
-          "file": "ui:1547",
+          "file": "ui:1555",
           "lane": "ui",
           "desc": "Chỉ chạy khi panel của build đó đang mở."
         },
         {
           "fn": "api.buildLog()",
-          "file": "api.go:860",
+          "file": "api.go:892",
           "lane": "http",
           "desc": "Xin phần log kể từ vị trí đã nhận, không kéo lại từ đầu."
         },
@@ -1176,13 +1176,13 @@
         },
         {
           "fn": "nối vào <pre>",
-          "file": "ui:1568",
+          "file": "ui:1576",
           "lane": "ui",
           "desc": "Đang ở đáy thì tự cuộn theo; đang đọc ở giữa thì giữ nguyên chỗ đang đọc."
         },
         {
           "fn": "status !== running?",
-          "file": "ui:1571",
+          "file": "ui:1579",
           "lane": "ui",
           "desc": "Còn chạy thì hẹn 800ms gọi lại. Xong rồi thì dừng poll và refresh() nếu trạng thái đã đổi."
         }
@@ -1206,25 +1206,25 @@
           "screen": "detail",
           "btn": "Push",
           "sel": "[data-push]",
-          "file": "ui:1380"
+          "file": "ui:1385"
         }
       ],
       "steps": [
         {
           "fn": "nút Push",
-          "file": "ui:1380",
+          "file": "ui:1385",
           "lane": "ui",
           "desc": "Chỉ hiện trên bản build thành công mà chưa lên registry."
         },
         {
           "fn": "api.pushBuild()",
-          "file": "api.go:937",
+          "file": "api.go:981",
           "lane": "http",
           "desc": "POST /api/build/{id}/push"
         },
         {
           "fn": "Store.Build()",
-          "file": "store.go:1073",
+          "file": "store.go:1074",
           "lane": "store",
           "desc": "Lấy bản ghi build theo id."
         },
@@ -1254,13 +1254,13 @@
         },
         {
           "fn": "Store.updateBuild()",
-          "file": "store.go:1091",
+          "file": "store.go:1092",
           "lane": "store",
           "desc": "Đánh dấu pushed, cập nhật digest, lưu history."
         },
         {
           "fn": "refresh()",
-          "file": "ui:801",
+          "file": "ui:804",
           "lane": "ui",
           "desc": "Thẻ build đổi sang trạng thái đã push."
         }
@@ -1276,61 +1276,61 @@
           "screen": "project",
           "btn": "Promote — ô trống trong bảng version",
           "sel": "[data-promote]",
-          "file": "ui:1300"
+          "file": "ui:1303"
         },
         {
           "screen": "detail",
           "btn": "Đưa lên <môi trường>",
           "sel": "[data-sendto]",
-          "file": "ui:1429"
+          "file": "ui:1437"
         },
         {
           "screen": "project",
           "btn": "Hộp thoại Build › Promote bản đó thay vì build",
           "sel": "#viaPromote",
-          "file": "ui:1747"
+          "file": "ui:1774"
         }
       ],
       "steps": [
         {
           "fn": "promoteDialog()",
-          "file": "ui:1856",
+          "file": "ui:1883",
           "lane": "ui",
           "desc": "Chọn môi trường đích và version. Cảnh báo nếu máy không có buildx."
         },
         {
           "fn": "cảnh báo trùng version",
-          "file": "ui:1896",
+          "file": "ui:1923",
           "lane": "ui",
           "desc": "Môi trường đích từng nhận đúng version này với một image khác → nói rõ tag sẽ bị trỏ sang image mới."
         },
         {
           "fn": "api.promoteBuild()",
-          "file": "api.go:783",
+          "file": "api.go:815",
           "lane": "http",
           "desc": "POST /api/build/{id}/promote"
         },
         {
           "fn": "status === success?",
-          "file": "api.go:810",
+          "file": "api.go:842",
           "lane": "http",
           "desc": "Chỉ promote được bản build thành công."
         },
         {
           "fn": "pushed && digest?",
-          "file": "api.go:814",
+          "file": "api.go:846",
           "lane": "http",
           "desc": "Chưa lên registry thì chưa có digest để trỏ tag mới vào — phải push trước."
         },
         {
           "fn": "cùng dự án, khác env",
-          "file": "api.go:823",
+          "file": "api.go:855",
           "lane": "http",
           "desc": "Hai môi trường của một dự án dùng chung repository."
         },
         {
           "fn": "tag đích ≠ tag nguồn",
-          "file": "api.go:851",
+          "file": "api.go:883",
           "lane": "http",
           "desc": "Thiếu tiền tố tag khác nhau thì promote sẽ trỏ tag nguồn vào chính nó và chẳng thay đổi gì — 409 kèm hướng dẫn sửa."
         },
@@ -1402,19 +1402,19 @@
           "screen": "detail",
           "btn": "Dừng build",
           "sel": "[data-cancel]",
-          "file": "ui:1389"
+          "file": "ui:1394"
         }
       ],
       "steps": [
         {
           "fn": "nút Dừng build",
-          "file": "ui:1389",
+          "file": "ui:1394",
           "lane": "ui",
           "desc": "Chỉ hiện khi build đang chạy."
         },
         {
           "fn": "api.cancelBuild()",
-          "file": "api.go:965",
+          "file": "api.go:1009",
           "lane": "http",
           "desc": "POST /api/build/{id}/cancel — 409 nếu build đã kết thúc."
         },
@@ -1450,7 +1450,7 @@
         },
         {
           "fn": "loadLog()",
-          "file": "ui:1547",
+          "file": "ui:1555",
           "lane": "ui",
           "desc": "Lần poll kế tiếp thấy status đã đổi → dừng poll và refresh()."
         }
@@ -1466,37 +1466,37 @@
           "screen": "detail",
           "btn": "Xóa khỏi lịch sử",
           "sel": "[data-del]",
-          "file": "ui:1396"
+          "file": "ui:1401"
         }
       ],
       "steps": [
         {
           "fn": "nút Xóa khỏi lịch sử",
-          "file": "ui:1396",
+          "file": "ui:1401",
           "lane": "ui",
           "desc": "Hỏi xác nhận trước. Image trên registry không bị đụng tới."
         },
         {
           "fn": "api.deleteBuild()",
-          "file": "api.go:973",
+          "file": "api.go:1017",
           "lane": "http",
           "desc": "DELETE /api/build/{id} → 204."
         },
         {
           "fn": "Store.DeleteBuild()",
-          "file": "store.go:1103",
+          "file": "store.go:1104",
           "lane": "store",
           "desc": "Bỏ bản ghi khỏi danh sách, xóa luôn file ~/.dima/logs/<id>.log."
         },
         {
           "fn": "persistHistoryLocked()",
-          "file": "store.go:1055",
+          "file": "store.go:1056",
           "lane": "store",
           "desc": "Ghi lại history.json."
         },
         {
           "fn": "refresh()",
-          "file": "ui:801",
+          "file": "ui:804",
           "lane": "ui",
           "desc": "Bảng lịch sử vẽ lại."
         }
@@ -1513,43 +1513,43 @@
           "screen": "project",
           "btn": "Build",
           "sel": "#doBuild",
-          "file": "ui:1124"
+          "file": "ui:1127"
         },
         {
           "screen": "env",
           "btn": "Build",
           "sel": "#doBuild",
-          "file": "ui:1340"
+          "file": "ui:1343"
         }
       ],
       "steps": [
         {
           "fn": "buildDialog()",
-          "file": "ui:1643",
+          "file": "ui:1669",
           "lane": "ui",
           "desc": "Hộp thoại chia đôi: version và tham số bên trái, câu lệnh bên phải. Chưa biết lệnh có tham số gì — hỏi server."
         },
         {
           "fn": "ask()",
-          "file": "ui:1709",
+          "file": "ui:1735",
           "lane": "ui",
           "desc": "Gọi sau 150ms ngừng gõ. Mỗi lần hỏi có số thứ tự; câu trả lời cũ về muộn bị bỏ, không đè lên câu mới."
         },
         {
           "fn": "POST /api/build/preview",
-          "file": "ui:1715",
+          "file": "ui:1741",
           "lane": "ui",
           "desc": "Gửi version (ô trống thì dùng cùng giá trị Build sẽ dùng), push và giá trị từng ô."
         },
         {
           "fn": "api.previewBuild()",
-          "file": "api.go:732",
+          "file": "api.go:766",
           "lane": "http",
           "desc": "Không chạy gì, không đụng docker — chỉ trả lời \"nếu bấm Build thì chạy lệnh gì, còn thiếu gì\"."
         },
         {
           "fn": "ReadGit()",
-          "file": "git.go:91",
+          "file": "git.go:125",
           "lane": "runner",
           "desc": "Lấy commit và nhánh để câu lệnh xem trước có đủ label như lúc chạy thật."
         },
@@ -1585,19 +1585,19 @@
         },
         {
           "fn": "expandVars()",
-          "file": "command.go:307",
+          "file": "command.go:301",
           "lane": "runner",
           "desc": "Thay biến, tên dài trước. Tham số rỗng kéo theo dấu cách đứng trước nó, nên không có khoảng trắng đôi."
         },
         {
           "fn": "drawParams()",
-          "file": "ui:1695",
+          "file": "ui:1721",
           "lane": "ui",
           "desc": "Lần đầu: vẽ bảng từ danh sách server trả về, rồi hỏi lại ngay với giá trị đang hiện trên màn hình."
         },
         {
           "fn": "syncGo()",
-          "file": "ui:1762",
+          "file": "ui:1789",
           "lane": "ui",
           "desc": "Khoá nút Build khi còn tham số bắt buộc trống, hoặc môi trường quan trọng chưa tick xác nhận."
         }
@@ -1621,49 +1621,49 @@
           "screen": "project",
           "btn": "Cài đặt dự án",
           "sel": "#doSettings",
-          "file": "ui:1130"
+          "file": "ui:1133"
         },
         {
           "screen": "env",
           "btn": "Cài đặt môi trường",
           "sel": "#doEnvSettings",
-          "file": "ui:1342"
+          "file": "ui:1345"
         }
       ],
       "steps": [
         {
           "fn": "projectDialog()",
-          "file": "ui:2207",
+          "file": "ui:2234",
           "lane": "ui",
           "desc": "Ô \"Lệnh build riêng\" và bảng tham số ngay dưới nó."
         },
         {
           "fn": "mountVarHelp()",
-          "file": "ui:1944",
+          "file": "ui:1971",
           "lane": "ui",
           "desc": "Chip các biến DIMA tự điền; bấm chip chèn biến vào lệnh và báo cho bảng tham số vẽ lại."
         },
         {
           "fn": "commandParamsOf()",
-          "file": "ui:1989",
+          "file": "ui:2016",
           "lane": "ui",
           "desc": "Bản sao phía trình duyệt của commandParams, để bảng đổi ngay khi gõ. Danh sách biến có sẵn lấy từ server."
         },
         {
           "fn": "mountParamDefs()",
-          "file": "ui:2004",
+          "file": "ui:2031",
           "lane": "ui",
           "desc": "Mỗi {tên} một dòng: kiểu, mặc định, lựa chọn, bắt buộc, ghi chú. Ở môi trường, cột \"Riêng\" chọn ghi đè dòng của dự án."
         },
         {
           "fn": "PUT /api/config",
-          "file": "ui:821",
+          "file": "ui:825",
           "lane": "ui",
           "desc": "Chỉ lưu dòng của tham số còn có trong lệnh — kể cả lệnh riêng của môi trường."
         },
         {
           "fn": "api.saveConfig()",
-          "file": "api.go:130",
+          "file": "api.go:138",
           "lane": "http",
           "desc": "Kiểm cả dự án lẫn từng môi trường trước khi ghi."
         },
@@ -1675,7 +1675,7 @@
         },
         {
           "fn": "Store.saveConfigLocked()",
-          "file": "store.go:927",
+          "file": "store.go:928",
           "lane": "store",
           "desc": "Cất bản cũ vào versions/ rồi mới ghi config.json."
         }
@@ -1699,13 +1699,13 @@
           "screen": "project",
           "btn": "Đọc từ registry",
           "sel": "#doRegistry",
-          "file": "ui:1131"
+          "file": "ui:1134"
         }
       ],
       "steps": [
         {
           "fn": "registryDialog()",
-          "file": "ui:1212",
+          "file": "ui:1215",
           "lane": "ui",
           "desc": "Liệt kê tag theo môi trường, đánh dấu \"đã có\", \"mới\", \"khác lịch sử\"."
         },
@@ -1723,61 +1723,61 @@
         },
         {
           "fn": "registryClient.ListTags()",
-          "file": "registry.go:334",
+          "file": "registry.go:382",
           "lane": "runner",
           "desc": "Thử lần lượt Harbor 2.x, Harbor 1.x, rồi API chuẩn. Image Docker Hub thì không đọc."
         },
         {
           "fn": "dockerCredentials()",
-          "file": "registry.go:107",
+          "file": "registry.go:133",
           "lane": "runner",
           "desc": "Mật khẩu là cái docker login đã lưu: credHelpers → auths → credsStore, đúng thứ tự docker CLI dùng."
         },
         {
           "fn": "credentialHelper()",
-          "file": "registry.go:141",
+          "file": "registry.go:171",
           "lane": "sys",
           "desc": "docker-credential-desktop get — mật khẩu không bao giờ nằm trong DIMA."
         },
         {
           "fn": "registryClient.harborTags()",
-          "file": "registry.go:357",
+          "file": "registry.go:405",
           "lane": "sys",
           "desc": "/api/v2.0/projects/{p}/repositories/{r}/artifacts — tag, digest, giờ push trong một lần gọi."
         },
         {
           "fn": "registryClient.harborV1Tags()",
-          "file": "registry.go:420",
+          "file": "registry.go:468",
           "lane": "sys",
           "desc": "/api/repositories/{repo}/tags — harbor.tech chạy Harbor 1.10 — cũng chính là bản không nhận manifest list."
         },
         {
           "fn": "registryClient.genericTags()",
-          "file": "registry.go:464",
+          "file": "registry.go:515",
           "lane": "sys",
           "desc": "/v2/<repo>/tags/list rồi HEAD từng tag lấy digest (tối đa 200). Không có giờ push."
         },
         {
           "fn": "registryClient.token()",
-          "file": "registry.go:248",
+          "file": "registry.go:290",
           "lane": "sys",
-          "desc": "Bearer token: chỉ gửi mật khẩu qua https và tới host cùng tên miền với registry."
+          "desc": "Bearer token: mật khẩu chỉ đi qua https, tới chính host registry hoặc tên miền cha/con của nó; IP phải trùng hẳn. Header đăng nhập thành công được dùng lại cho các request sau."
         },
         {
           "fn": "matchTags()",
-          "file": "registry.go:534",
+          "file": "registry.go:632",
           "lane": "store",
-          "desc": "Xếp tag vào môi trường; tag lịch sử ghi một digest mà registry giữ digest khác thì đánh dấu \"khác lịch sử\"."
+          "desc": "Bỏ hẳn tag sai bộ ký tự docker (registry không được đặt tên thành lệnh shell), bỏ digest không phải sha256. Rồi xếp tag vào môi trường; tag lịch sử ghi digest khác thì đánh dấu \"khác lịch sử\"."
         },
         {
           "fn": "envForTag()",
-          "file": "registry.go:587",
+          "file": "registry.go:697",
           "lane": "store",
           "desc": "Tiền tố dài nhất thắng, phần sau tiền tố phải có chữ số — latest, cache không phải phiên bản."
         },
         {
           "fn": "POST /api/registry/import",
-          "file": "ui:1269",
+          "file": "ui:1272",
           "lane": "ui",
           "desc": "Gửi tên tag chứ không gửi digest."
         },
@@ -1789,7 +1789,7 @@
         },
         {
           "fn": "Store.addBuild()",
-          "file": "store.go:1084",
+          "file": "store.go:1085",
           "lane": "store",
           "desc": "Bản ghi kiểu \"registry\": thành công, đã push, có digest — promote được ngay."
         }
@@ -1819,13 +1819,13 @@
           "screen": "project",
           "btn": "Dọn image cũ",
           "sel": "#doCleanup",
-          "file": "ui:1132"
+          "file": "ui:1135"
         }
       ],
       "steps": [
         {
           "fn": "cleanupDialog()",
-          "file": "ui:1142",
+          "file": "ui:1145",
           "lane": "ui",
           "desc": "Chọn giữ bao nhiêu bản mỗi môi trường; danh sách giữ/xoá kèm lý do."
         },
@@ -1861,13 +1861,13 @@
         },
         {
           "fn": "envForTag()",
-          "file": "registry.go:587",
+          "file": "registry.go:697",
           "lane": "store",
           "desc": "Cùng luật xếp tag vào môi trường với lúc đọc registry; môi trường chỉ-máy-này nhận cả tag như cache."
         },
         {
           "fn": "POST /api/cleanup",
-          "file": "ui:1188",
+          "file": "ui:1191",
           "lane": "ui",
           "desc": "Xác nhận lần cuối rồi gửi danh sách tag đã tick."
         },
@@ -1879,7 +1879,7 @@
         },
         {
           "fn": "Store.removeImage()",
-          "file": "cleanup.go:130",
+          "file": "cleanup.go:143",
           "lane": "runner",
           "desc": "docker rmi không -f: docker từ chối thì lời từ chối của docker được trả về nguyên văn."
         },
@@ -1915,25 +1915,25 @@
           "screen": "app",
           "btn": "Tự chạy mỗi 5 giây",
           "sel": "setInterval",
-          "file": "ui:2764"
+          "file": "ui:2791"
         }
       ],
       "steps": [
         {
           "fn": "refresh()",
-          "file": "ui:801",
+          "file": "ui:804",
           "lane": "ui",
           "desc": "Vòng làm mới 5 giây của cả giao diện."
         },
         {
           "fn": "api.state()",
-          "file": "api.go:115",
+          "file": "api.go:123",
           "lane": "http",
           "desc": "Trả cấu hình, lịch sử và danh sách container trong một lần."
         },
         {
           "fn": "Store.Containers()",
-          "file": "containers.go:112",
+          "file": "containers.go:118",
           "lane": "runner",
           "desc": "Cache 10 giây: mỗi cửa sổ poll 5 giây một lần, không nên sinh một tiến trình docker mỗi lần."
         },
@@ -1957,19 +1957,19 @@
         },
         {
           "fn": "envTile()",
-          "file": "ui:993",
+          "file": "ui:996",
           "lane": "ui",
           "desc": "\"▶ N container đang chạy trên máy này\" trên ô môi trường."
         },
         {
           "fn": "cellHTML()",
-          "file": "ui:1279",
+          "file": "ui:1282",
           "lane": "ui",
           "desc": "Huy hiệu \"▶ đang chạy\" trong bảng version."
         },
         {
           "fn": "containersHTML()",
-          "file": "ui:679",
+          "file": "ui:682",
           "lane": "ui",
           "desc": "Danh sách container ở trang dự án và trang môi trường."
         }
@@ -1993,37 +1993,37 @@
           "screen": "detail",
           "btn": "Xem các commit",
           "sel": "[data-changes]",
-          "file": "ui:1407"
+          "file": "ui:1412"
         }
       ],
       "steps": [
         {
           "fn": "renderBuilds()",
-          "file": "ui:1347",
+          "file": "ui:1350",
           "lane": "ui",
           "desc": "Nút trong thẻ build; kết quả được giữ lại để vòng làm mới không gấp nó về thành nút."
         },
         {
           "fn": "GET /api/build/{id}/changes",
-          "file": "ui:1414",
+          "file": "ui:1419",
           "lane": "ui",
           "desc": "Hỏi theo id bản build."
         },
         {
           "fn": "api.buildChanges()",
-          "file": "api.go:891",
+          "file": "api.go:923",
           "lane": "http",
-          "desc": "Bản đọc vào từ image/registry không có commit — nói rõ thay vì trả danh sách rỗng."
+          "desc": "Bản lùi về commit cũ (rollback) thì trả danh sách commit bị bỏ đi thay vì danh sách rỗng. Bản đọc vào từ image/registry không có commit — nói rõ."
         },
         {
           "fn": "previousInEnv()",
-          "file": "api.go:877",
+          "file": "api.go:909",
           "lane": "store",
           "desc": "Bản thành công trước đó của CÙNG môi trường có ghi commit — bản của môi trường khác không tính."
         },
         {
           "fn": "CommitsBetween()",
-          "file": "git.go:60",
+          "file": "git.go:61",
           "lane": "runner",
           "desc": "Commit không có trong thư mục (build ở máy khác, nhánh đã xoá) thì báo lỗi, không coi là \"không có thay đổi\". Tối đa 100 commit."
         },
@@ -2058,7 +2058,7 @@
       "steps": [
         {
           "fn": "api()",
-          "file": "ui:550",
+          "file": "ui:553",
           "lane": "ui",
           "desc": "Mọi request ghi của giao diện đều gửi Content-Type: application/json."
         },
@@ -2082,7 +2082,7 @@
         },
         {
           "fn": "api.routes()",
-          "file": "api.go:32",
+          "file": "api.go:33",
           "lane": "http",
           "desc": "Qua được hai lớp trên mới tới handler."
         }
@@ -2118,7 +2118,7 @@
     },
     {
       "title": "Bảng endpoint",
-      "file": "api.go:32",
+      "file": "api.go:33",
       "fn": "api.routes()",
       "why": "Mỗi nút bấm trên giao diện tương ứng một dòng ở đây — từ đó lần ra handler của bất kỳ thao tác nào."
     },
@@ -2142,13 +2142,13 @@
     },
     {
       "title": "Đọc registry",
-      "file": "registry.go:334",
+      "file": "registry.go:382",
       "fn": "registryClient.ListTags()",
       "why": "Ba cách đọc tag theo thứ tự, và cách lấy mật khẩu của docker login mà không lưu nó."
     },
     {
       "title": "Giao diện",
-      "file": "ui/index.html:801",
+      "file": "ui/index.html:804",
       "fn": "refresh()",
       "why": "Không framework: state toàn cục, vẽ lại mỗi 5 giây; mọi màn hình là một hàm render đọc từ state."
     }

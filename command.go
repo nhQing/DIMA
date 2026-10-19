@@ -2,7 +2,7 @@ package main
 
 import (
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -276,7 +276,7 @@ func paramValues(fields []ParamField) (map[string]string, []string) {
 				v = strings.TrimSpace(f.Options)
 			}
 		case ParamChoice:
-			if v != "" && !contains(splitOptions(f.Options), v) {
+			if v != "" && !slices.Contains(splitOptions(f.Options), v) {
 				problems = append(problems, f.Name+" (giá trị “"+v+"” không có trong danh sách chọn)")
 				continue
 			}
@@ -289,31 +289,20 @@ func paramValues(fields []ParamField) (map[string]string, []string) {
 	return values, problems
 }
 
-func contains(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
-}
-
-// expandVars replaces {name} with its value.
+// expandVars replaces {name} with its value, in a single pass over the
+// template.
 //
-// Longer names are substituted first so that {version} is never damaged by
-// a shorter name that happens to be a prefix of it. Unknown placeholders are
-// left exactly as written: silently blanking them would turn a typo into a
-// command that runs and does the wrong thing.
+// One pass, not one ReplaceAll per name: a substituted value is never read
+// again. Otherwise a branch named fix{ref} inside {labels}, or a parameter
+// typed as {tag}, would be expanded a second time — and a quote inside a
+// later value could break out of the quoting {labels} put around an earlier
+// one. Unknown placeholders are left exactly as written: silently blanking
+// them would turn a typo into a command that runs and does the wrong thing.
 func expandVars(template string, values map[string]string) string {
-	names := make([]string, 0, len(values))
-	for name := range values {
-		names = append(names, name)
-	}
-	sort.Slice(names, func(i, j int) bool { return len(names[i]) > len(names[j]) })
-
-	out := template
-	for _, name := range names {
-		out = strings.ReplaceAll(out, "{"+name+"}", values[name])
-	}
-	return out
+	return placeholderRe.ReplaceAllStringFunc(template, func(m string) string {
+		if v, ok := values[m[1:len(m)-1]]; ok {
+			return v
+		}
+		return m
+	})
 }

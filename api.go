@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,8 +68,15 @@ func fail(w http.ResponseWriter, code int, msg string) {
 	writeJSON(w, code, map[string]string{"error": msg})
 }
 
-// badTagChars are the characters docker will not accept in a tag.
-const badTagChars = " \t/\\:"
+// tagRe is docker's own grammar for a tag. A version and a tag prefix are
+// held to it, not just kept free of a few bad characters: the version ends
+// up unquoted inside {ref} and {tag} in a custom build command run by a
+// shell, and since versions can now come from a registry (Đọc từ registry),
+// a registry can no longer hand DIMA "1.0;calc" as a version.
+var tagRe = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
+
+// prefixRe is a tag prefix: tag characters, starting like a tag, or empty.
+var prefixRe = regexp.MustCompile(`^([A-Za-z0-9_][A-Za-z0-9_.-]*)?$`)
 
 // checkVersion validates the project version a build or promote is given.
 func checkVersion(v string) (string, string) {
@@ -76,8 +84,8 @@ func checkVersion(v string) (string, string) {
 	if v == "" {
 		return "", "chưa nhập version"
 	}
-	if strings.ContainsAny(v, badTagChars) {
-		return "", "version không được chứa khoảng trắng hoặc dấu : / \\"
+	if !tagRe.MatchString(v) {
+		return "", "version chỉ được gồm chữ, số và dấu . _ - (bắt đầu bằng chữ hoặc số, tối đa 128 ký tự) — đúng bộ ký tự docker nhận trong tag"
 	}
 	return v, ""
 }
@@ -157,8 +165,8 @@ func (a *api) saveConfig(w http.ResponseWriter, r *http.Request) {
 				fail(w, http.StatusBadRequest, "môi trường "+e.Name+" chưa có tên image — khai ở dự án hoặc ở chính môi trường")
 				return
 			}
-			if strings.ContainsAny(e.TagPrefix, badTagChars) {
-				fail(w, http.StatusBadRequest, "tiền tố tag của "+e.Name+" không được chứa khoảng trắng hoặc dấu : / \\")
+			if !prefixRe.MatchString(strings.TrimSpace(e.TagPrefix)) {
+				fail(w, http.StatusBadRequest, "tiền tố tag của "+e.Name+" chỉ được gồm chữ, số và dấu . _ - (bắt đầu bằng chữ hoặc số)")
 				return
 			}
 			// Unlike the folder check below, this can only be reached by an
@@ -688,8 +696,8 @@ func (a *api) startBuild(w http.ResponseWriter, r *http.Request) {
 	}
 	// Checked here, not only in the dialog: a confirmation the page alone
 	// enforces is one stale tab or one script away from not existing.
-	if env.Protected && !req.Confirm {
-		fail(w, http.StatusConflict, protectedBuildWarning(project, env)+". Muốn vẫn build thì xác nhận trong hộp thoại Build")
+	if why := confirmReason(project, env); why != "" && !req.Confirm {
+		fail(w, http.StatusConflict, why+". Muốn vẫn build thì xác nhận trong hộp thoại Build")
 		return
 	}
 	writeJSON(w, http.StatusOK, a.store.Start(project, env, version, req.Push, req.Params))
@@ -704,6 +712,30 @@ type buildRequest struct {
 	// Confirm is the person's explicit yes to building straight into a
 	// protected environment.
 	Confirm bool `json:"confirm"`
+}
+
+// confirmReason says why a build here needs an explicit yes, or "".
+//
+// Two cases. A protected environment, always. And a promote project built
+// outside its source: every environment may build its own image, but before
+// that was allowed this was refused outright, and no existing configuration
+// has the protected flag yet — without the confirmation, upgrading would
+// have turned "production only receives the tested image" into one click.
+func confirmReason(p Project, e Env) string {
+	if e.Protected {
+		return protectedBuildWarning(p, e)
+	}
+	if p.BuildsOutsideSource(e.ID) {
+		src := e.Name
+		for _, x := range p.Envs {
+			if x.ID == p.BuildEnvID() {
+				src = x.Name
+			}
+		}
+		return "dự án " + p.Name + " build ở " + src + " rồi promote: build riêng ở " + e.Name +
+			" sẽ ra một image mới, khác digest với bản đã test"
+	}
+	return ""
 }
 
 // protectedBuildWarning says why building into a protected environment needs
@@ -728,7 +760,9 @@ func protectedBuildWarning(p Project, e Env) string {
 //
 // It goes through planBuild, the same function Start runs, so the preview
 // cannot show one command and the build run another. The dialog asks again
-// on every keystroke; nothing here touches docker or the disk.
+// on every pause in typing. Nothing here runs docker or writes anything; the
+// only process it may start is git, for the labels, and that answer is
+// cached for a few seconds (ReadGitCached).
 func (a *api) previewBuild(w http.ResponseWriter, r *http.Request) {
 	var req buildRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -749,7 +783,7 @@ func (a *api) previewBuild(w http.ResponseWriter, r *http.Request) {
 	if _, msg := checkVersion(version); msg != "" {
 		blocked = append(blocked, msg)
 	}
-	plan := planBuild(cfg.DockerBin, project, env, version, req.Params, ReadGit(project.Effective(env).Context))
+	plan := planBuild(cfg.DockerBin, project, env, version, req.Params, ReadGitCached(project.Effective(env).Context, 5*time.Second))
 	if msg := CheckBuildCommand(plan.Custom); msg != "" {
 		blocked = append(blocked, msg)
 	}
@@ -757,10 +791,7 @@ func (a *api) previewBuild(w http.ResponseWriter, r *http.Request) {
 	if req.Push && !plan.Env.IsOnlyLocal {
 		steps = append(steps, cfg.DockerBin+" push "+plan.Ref)
 	}
-	confirmWhy := ""
-	if env.Protected {
-		confirmWhy = protectedBuildWarning(project, env)
-	}
+	confirmWhy := confirmReason(project, env)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"command":  plan.Command,
 		"steps":    steps,
@@ -772,8 +803,9 @@ func (a *api) previewBuild(w http.ResponseWriter, r *http.Request) {
 		// The dialog warns, it does not refuse: building outside the
 		// promote chain is allowed, it just does not ship the tested image.
 		"outsideSource": project.BuildsOutsideSource(env.ID),
-		// A protected environment needs a ticked confirmation to build.
-		"needsConfirm": env.Protected,
+		// A protected environment, or a build outside the promote source,
+		// needs a ticked confirmation to build.
+		"needsConfirm": confirmWhy != "",
 		"confirmWhy":   confirmWhy,
 	})
 }
@@ -921,6 +953,18 @@ func (a *api) buildChanges(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fail(w, http.StatusConflict, err.Error())
 		return
+	}
+	// Nothing new but a different commit: this build went BACK — a rollback,
+	// or a build from an older branch. The useful answer is then what it
+	// dropped, not an empty list that reads as "no changes".
+	if len(commits) == 0 && from != "" {
+		removed, err := CommitsBetween(p.Context, b.Commit, from)
+		if err == nil && len(removed) > 0 {
+			out["removed"] = removed
+			out["truncated"] = len(removed) >= maxChanges
+			writeJSON(w, http.StatusOK, out)
+			return
+		}
 	}
 	out["commits"] = commits
 	out["truncated"] = len(commits) >= maxChanges

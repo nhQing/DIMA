@@ -428,9 +428,10 @@ type Store struct {
 	dockerOK        bool
 	dockerCheckedAt time.Time
 
-	// Cached docker ps, refreshed by Containers.
-	containers   []Container
-	containersAt time.Time
+	// Cached docker ps, refreshed by Containers, one refresh at a time.
+	containers     []Container
+	containersAt   time.Time
+	containersBusy bool
 }
 
 func defaultConfig() Config {

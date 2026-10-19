@@ -53,6 +53,33 @@ func TestPlanCleanupKeepsWhatMatters(t *testing.T) {
 	}
 }
 
+// Hai môi trường cùng repo, cùng không tiền tố: mọi tag bị xếp vào một bên,
+// nhưng bản hiện tại của bên kia vẫn phải được giữ.
+func TestPlanCleanupKeepsCurrentOfAnEnvSharingThePrefix(t *testing.T) {
+	p := Project{ID: "p", Image: "app", Envs: []Env{
+		{ID: "stg", Name: "Staging"},
+		{ID: "dev", Name: "Dev", IsOnlyLocal: true},
+	}}
+	day := func(n int) time.Time { return time.Date(2026, 10, n, 9, 0, 0, 0, time.UTC) }
+	images := []LocalImage{
+		{Repository: "app", Tag: "1.0.9", CreatedAt: day(19)},
+		{Repository: "app", Tag: "1.0.8", CreatedAt: day(18)},
+		{Repository: "app", Tag: "1.0.4", CreatedAt: day(4)}, // bản hiện tại của Dev
+	}
+	history := []Build{
+		{ProjectID: "p", EnvID: "stg", Ref: "app:1.0.9", Status: "success"},
+		{ProjectID: "p", EnvID: "dev", Ref: "app:1.0.4", Status: "success"},
+	}
+	for _, it := range planCleanup(p, images, history, nil, 1) {
+		if it.Tag == "1.0.4" && (it.Remove || it.Why != "bản hiện tại của Dev") {
+			t.Errorf("1.0.4 = %+v — bản hiện tại của Dev bị đem xoá", it)
+		}
+		if it.Tag == "1.0.8" && !it.Remove {
+			t.Errorf("1.0.8 phải bị xoá khi chỉ giữ 1 bản: %+v", it)
+		}
+	}
+}
+
 func TestPlanCleanupNeverKeepsZero(t *testing.T) {
 	p := Project{ID: "p", Image: "a", Envs: []Env{{ID: "e", Name: "E", TagPrefix: ""}}}
 	items := planCleanup(p, []LocalImage{{Repository: "a", Tag: "1.0.0"}}, nil, nil, 0)
