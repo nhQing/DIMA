@@ -362,10 +362,10 @@ func TestPromoteSourceNeverLandsOnALocalOnlyEnv(t *testing.T) {
 	if p.SourceEnvID != "stg" {
 		t.Errorf("môi trường nguồn = %q, muốn stg — không được rơi vào Cache", p.SourceEnvID)
 	}
-	// Và Cache vẫn phải build được: nó đứng ngoài chuỗi promote, nên cấm
-	// build ở đó là làm nó rỗng vĩnh viễn.
-	if !p.CanBuild("cache") {
-		t.Error("môi trường local-only phải tự build được dù dự án chạy kiểu promote")
+	// Cache đứng ngoài chuỗi promote: tự build là cách duy nhất nó có image,
+	// nên build ở đó không phải là "đi ngoài nguồn" và không bị cảnh báo.
+	if p.BuildsOutsideSource("cache") {
+		t.Error("môi trường local-only build là bình thường, không được cảnh báo là đi ngoài nguồn")
 	}
 }
 

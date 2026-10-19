@@ -7,10 +7,27 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
-type api struct{ store *Store }
+type api struct {
+	store *Store
+	// registry is nil in production code and set by tests, which point it
+	// at a fake registry; reg() fills in the real one, once — requests are
+	// served concurrently.
+	registry *registryClient
+	regOnce  sync.Once
+}
+
+func (a *api) reg() *registryClient {
+	a.regOnce.Do(func() {
+		if a.registry == nil {
+			a.registry = newRegistryClient()
+		}
+	})
+	return a.registry
+}
 
 func (a *api) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/state", a.state)
@@ -26,8 +43,14 @@ func (a *api) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/build-vars", a.buildVars)
 	mux.HandleFunc("GET /api/images", a.listImages)
 	mux.HandleFunc("POST /api/images/import", a.importImages)
+	mux.HandleFunc("GET /api/registry/tags", a.registryTags)
+	mux.HandleFunc("POST /api/registry/import", a.registryImport)
+	mux.HandleFunc("GET /api/cleanup", a.cleanupPreview)
+	mux.HandleFunc("POST /api/cleanup", a.cleanupRun)
 	mux.HandleFunc("POST /api/build", a.startBuild)
+	mux.HandleFunc("POST /api/build/preview", a.previewBuild)
 	mux.HandleFunc("GET /api/build/{id}/log", a.buildLog)
+	mux.HandleFunc("GET /api/build/{id}/changes", a.buildChanges)
 	mux.HandleFunc("POST /api/build/{id}/push", a.pushBuild)
 	mux.HandleFunc("POST /api/build/{id}/promote", a.promoteBuild)
 	mux.HandleFunc("POST /api/build/{id}/cancel", a.cancelBuild)
@@ -98,6 +121,7 @@ func (a *api) state(w http.ResponseWriter, r *http.Request) {
 		"dockerOk":      ok,
 		"dockerVersion": version,
 		"buildxOk":      a.store.BuildxOK(),
+		"containers":    a.store.Containers(),
 		"appVersion":    appVersion,
 		"buildStamp":    buildStamp,
 	})
@@ -114,7 +138,15 @@ func (a *api) saveConfig(w http.ResponseWriter, r *http.Request) {
 			fail(w, http.StatusBadRequest, "mỗi dự án phải có tên")
 			return
 		}
+		if msg := CheckParams(p.Params); msg != "" {
+			fail(w, http.StatusBadRequest, "dự án "+p.Name+": "+msg)
+			return
+		}
 		for _, e := range p.Envs {
+			if msg := CheckParams(e.Params); msg != "" {
+				fail(w, http.StatusBadRequest, "môi trường "+e.Name+": "+msg)
+				return
+			}
 			if strings.TrimSpace(e.Name) == "" {
 				fail(w, http.StatusBadRequest, "môi trường trong dự án "+p.Name+" chưa có tên")
 				return
@@ -615,11 +647,7 @@ func (a *api) restoreVersion(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) startBuild(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		EnvID   string `json:"envId"`
-		Version string `json:"version"`
-		Push    bool   `json:"push"`
-	}
+	var req buildRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		fail(w, http.StatusBadRequest, "JSON không hợp lệ")
 		return
@@ -627,11 +655,6 @@ func (a *api) startBuild(w http.ResponseWriter, r *http.Request) {
 	project, env, found := a.store.Config().FindEnv(req.EnvID)
 	if !found {
 		fail(w, http.StatusNotFound, "không tìm thấy môi trường")
-		return
-	}
-	if !project.CanBuild(env.ID) {
-		fail(w, http.StatusConflict,
-			"dự án "+project.Name+" chạy theo kiểu build một lần rồi promote, nên chỉ build được ở môi trường nguồn")
 		return
 	}
 	// Refused here rather than quietly building without the push: a request
@@ -658,7 +681,101 @@ func (a *api) startBuild(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, msg)
 		return
 	}
-	writeJSON(w, http.StatusOK, a.store.Start(project, env, version, req.Push))
+	plan := planBuild(a.store.Config().DockerBin, project, env, version, req.Params, GitInfo{})
+	if len(plan.Problems) > 0 {
+		fail(w, http.StatusBadRequest, "chưa điền tham số bắt buộc: "+strings.Join(plan.Problems, ", "))
+		return
+	}
+	// Checked here, not only in the dialog: a confirmation the page alone
+	// enforces is one stale tab or one script away from not existing.
+	if env.Protected && !req.Confirm {
+		fail(w, http.StatusConflict, protectedBuildWarning(project, env)+". Muốn vẫn build thì xác nhận trong hộp thoại Build")
+		return
+	}
+	writeJSON(w, http.StatusOK, a.store.Start(project, env, version, req.Push, req.Params))
+}
+
+// buildRequest is what the build dialog sends, both to preview and to build.
+type buildRequest struct {
+	EnvID   string            `json:"envId"`
+	Version string            `json:"version"`
+	Push    bool              `json:"push"`
+	Params  map[string]string `json:"params"`
+	// Confirm is the person's explicit yes to building straight into a
+	// protected environment.
+	Confirm bool `json:"confirm"`
+}
+
+// protectedBuildWarning says why building into a protected environment needs
+// a yes, and what the usual road is instead.
+func protectedBuildWarning(p Project, e Env) string {
+	others := []string{}
+	for _, x := range p.Envs {
+		if x.ID != e.ID && !x.IsOnlyLocal && !x.Protected {
+			others = append(others, x.Name)
+		}
+	}
+	msg := "môi trường " + e.Name + " được đánh dấu quan trọng: build thẳng ở đây là đưa lên một image chưa chạy ở môi trường nào khác"
+	if len(others) > 0 {
+		msg += " — đường thường đi là build ở " + strings.Join(others, " hoặc ") + " rồi promote sang"
+	}
+	return msg
+}
+
+// previewBuild answers what a build would run, without running it: the
+// command with every placeholder filled, the parameter table with the values
+// it starts from, and what still stops the build from starting.
+//
+// It goes through planBuild, the same function Start runs, so the preview
+// cannot show one command and the build run another. The dialog asks again
+// on every keystroke; nothing here touches docker or the disk.
+func (a *api) previewBuild(w http.ResponseWriter, r *http.Request) {
+	var req buildRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		fail(w, http.StatusBadRequest, "JSON không hợp lệ")
+		return
+	}
+	cfg := a.store.Config()
+	project, env, found := cfg.FindEnv(req.EnvID)
+	if !found {
+		fail(w, http.StatusNotFound, "không tìm thấy môi trường")
+		return
+	}
+	version := strings.TrimSpace(req.Version)
+	if version == "" {
+		version = env.LastVersion
+	}
+	blocked := []string{}
+	if _, msg := checkVersion(version); msg != "" {
+		blocked = append(blocked, msg)
+	}
+	plan := planBuild(cfg.DockerBin, project, env, version, req.Params, ReadGit(project.Effective(env).Context))
+	if msg := CheckBuildCommand(plan.Custom); msg != "" {
+		blocked = append(blocked, msg)
+	}
+	steps := []string{plan.Command}
+	if req.Push && !plan.Env.IsOnlyLocal {
+		steps = append(steps, cfg.DockerBin+" push "+plan.Ref)
+	}
+	confirmWhy := ""
+	if env.Protected {
+		confirmWhy = protectedBuildWarning(project, env)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"command":  plan.Command,
+		"steps":    steps,
+		"ref":      plan.Ref,
+		"custom":   plan.Custom != "",
+		"params":   plan.Fields,
+		"problems": plan.Problems,
+		"blocked":  blocked,
+		// The dialog warns, it does not refuse: building outside the
+		// promote chain is allowed, it just does not ship the tested image.
+		"outsideSource": project.BuildsOutsideSource(env.ID),
+		// A protected environment needs a ticked confirmation to build.
+		"needsConfirm": env.Protected,
+		"confirmWhy":   confirmWhy,
+	})
 }
 
 // promoteBuild re-tags the image of an existing build for another
@@ -752,6 +869,69 @@ func (a *api) buildLog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"build": b, "chunk": chunk, "offset": next,
 	})
+}
+
+// previousInEnv is the build an environment ran before b: the newest
+// successful record of the same environment that started earlier and knows
+// its commit. history is newest first.
+func previousInEnv(history []Build, b Build) (Build, bool) {
+	for _, x := range history {
+		if x.ID == b.ID || x.EnvID != b.EnvID || x.Status != "success" || x.Commit == "" {
+			continue
+		}
+		if x.StartedAt.Before(b.StartedAt) {
+			return x, true
+		}
+	}
+	return Build{}, false
+}
+
+// buildChanges answers "what is new in this version": the commits between
+// the build this environment ran before and this one.
+func (a *api) buildChanges(w http.ResponseWriter, r *http.Request) {
+	b, ok := a.store.Build(r.PathValue("id"))
+	if !ok {
+		fail(w, http.StatusNotFound, "không tìm thấy bản build")
+		return
+	}
+	if b.Commit == "" {
+		fail(w, http.StatusConflict, "bản này không ghi commit nào — thư mục lúc build không phải git repo, hoặc bản được đọc vào từ image/registry")
+		return
+	}
+	p, ok := a.store.Config().FindProject(b.ProjectID)
+	if !ok || strings.TrimSpace(p.Context) == "" {
+		fail(w, http.StatusConflict, "dự án của bản này không còn thư mục mã nguồn để đọc git")
+		return
+	}
+	prev, hasPrev := previousInEnv(a.store.Builds(), b)
+	from := ""
+	if hasPrev {
+		from = prev.Commit
+	}
+	out := map[string]any{"to": b.Commit, "from": from, "commits": []Commit{}}
+	if hasPrev {
+		out["fromVersion"] = verOrTag(prev)
+	}
+	if from == b.Commit {
+		// A promote, or a rebuild of the same commit: same source, nothing new.
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	commits, err := CommitsBetween(p.Context, from, b.Commit)
+	if err != nil {
+		fail(w, http.StatusConflict, err.Error())
+		return
+	}
+	out["commits"] = commits
+	out["truncated"] = len(commits) >= maxChanges
+	writeJSON(w, http.StatusOK, out)
+}
+
+func verOrTag(b Build) string {
+	if b.Tag != "" {
+		return b.Tag
+	}
+	return b.Version
 }
 
 func (a *api) pushBuild(w http.ResponseWriter, r *http.Request) {

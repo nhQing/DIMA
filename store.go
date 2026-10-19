@@ -78,6 +78,8 @@ type Env struct {
 	// BuildCommand replaces `docker build` entirely when set — for folders
 	// whose build is driven by a script. Empty means the normal path.
 	BuildCommand string `json:"buildCommand"`
+	// Params overrides the project's parameter rows by name. See Param.
+	Params []Param `json:"params,omitempty"`
 
 	// IsOnlyLocal marks an environment whose image never leaves this
 	// machine: a build cache, a local tool image, anything built to be used
@@ -92,8 +94,18 @@ type Env struct {
 	// counterpart to inherit from, so Effective passes it through unchanged.
 	IsOnlyLocal bool `json:"isOnlyLocal,omitempty"`
 
+	// Protected marks an environment where a mistake is expensive —
+	// production. An image should reach it by promote, after running
+	// somewhere else first; building straight into it is still allowed, but
+	// only with an explicit confirmation, checked by the server.
+	Protected bool `json:"protected,omitempty"`
+
 	AutoPush    bool   `json:"autoPush"`
 	LastVersion string `json:"lastVersion"`
+	// LastParams are the parameter values of this environment's last build,
+	// offered again by the next one. Per environment, like LastVersion:
+	// staging and production rarely want the same switches.
+	LastParams map[string]string `json:"lastParams,omitempty"`
 
 	// LastTag is the pre-v2 name of LastVersion, read once during migration.
 	LastTag string `json:"lastTag,omitempty"`
@@ -156,6 +168,8 @@ type Project struct {
 	// BuildCommand replaces `docker build` for every environment that does
 	// not override it. See Env.BuildCommand.
 	BuildCommand string `json:"buildCommand"`
+	// Params describes the placeholders of the user's own in BuildCommand.
+	Params []Param `json:"params,omitempty"`
 
 	// Origin records who created this project: OriginUser or
 	// OriginFolderSync. Everything written before schema 3 is OriginUser.
@@ -231,6 +245,7 @@ func (p Project) Effective(e Env) Env {
 	out.Target = firstNonEmpty(e.Target, p.Target)
 	out.EnvFile = firstNonEmpty(e.EnvFile, p.EnvFile)
 	out.BuildCommand = firstNonEmpty(e.BuildCommand, p.BuildCommand)
+	out.Params = mergeParams(p.Params, e.Params)
 	out.BuildArgs = mergeKV(p.BuildArgs, e.BuildArgs)
 	out.Labels = mergeKV(p.Labels, e.Labels)
 	// Flags are additive by nature, so the environment's are appended to the
@@ -239,9 +254,14 @@ func (p Project) Effective(e Env) Env {
 	return out
 }
 
-// BuildEnvID is the environment a build may start in. Under ModePromote a
-// project has exactly one; that single source is what makes "the image on
-// production is the image we tested" true.
+// BuildEnvID is the environment a promote project normally builds in. The
+// others normally receive that image by promote, which is what makes "the
+// image on production is the image we tested" true.
+//
+// Normally, not only: every environment may build an image of its own (see
+// BuildsOutsideSource). This used to be the only environment allowed to
+// build, which left no way to ship a production-only fix, or to rebuild an
+// environment whose build args bake in something the source's do not.
 func (p Project) BuildEnvID() string {
 	if p.ReleaseMode != ModePromote {
 		return ""
@@ -262,21 +282,23 @@ func (p Project) BuildEnvID() string {
 	return ""
 }
 
-// CanBuild reports whether a build may start in this environment.
-func (p Project) CanBuild(envID string) bool {
+// BuildsOutsideSource reports whether a build in this environment steps
+// outside the project's promote chain: a promote project, building somewhere
+// other than its source. It is allowed — the build dialog only says that the
+// result will not be the image the source tested.
+//
+// A local-only environment never counts: it stands outside the chain anyway,
+// nothing promotes into it, so building its own is its only way to an image.
+func (p Project) BuildsOutsideSource(envID string) bool {
 	if p.ReleaseMode != ModePromote {
-		return true
+		return false
 	}
-	// A local-only environment stands outside the promote chain: nothing
-	// promotes into it and nothing promotes out of it, so the only way it
-	// ever gets an image is by building its own. Refusing that would make
-	// the environment permanently empty.
 	for _, e := range p.Envs {
 		if e.ID == envID && e.IsOnlyLocal {
-			return true
+			return false
 		}
 	}
-	return p.BuildEnvID() == envID
+	return p.BuildEnvID() != envID
 }
 
 // Tag is the registry tag an environment gives a project version.
@@ -342,6 +364,10 @@ const (
 	// KindImport is a tag that already existed on the machine, read in
 	// rather than produced by DIMA.
 	KindImport = "import"
+	// KindRegistry is a tag read from the registry itself — pushed by CI, a
+	// colleague or another machine. Unlike KindImport it carries the
+	// registry's own digest, so it can be promoted straight away.
+	KindRegistry = "registry"
 )
 
 type Build struct {
@@ -401,6 +427,10 @@ type Store struct {
 	dockerVersion   string
 	dockerOK        bool
 	dockerCheckedAt time.Time
+
+	// Cached docker ps, refreshed by Containers.
+	containers   []Container
+	containersAt time.Time
 }
 
 func defaultConfig() Config {
@@ -1088,16 +1118,37 @@ func (s *Store) DeleteBuild(id string) {
 // rememberVersion stores the version last shipped to an environment so the
 // build dialog can offer the next one.
 func (s *Store) rememberVersion(envID, version string) {
+	s.rememberBuild(envID, version, nil)
+}
+
+// rememberBuild is rememberVersion plus the parameter values the build ran
+// with. A nil map leaves the remembered values alone: a promote has no
+// parameters, and must not wipe what the last real build used.
+func (s *Store) rememberBuild(envID, version string, params map[string]string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Config() hands out a shallow copy whose Projects and Envs share their
+	// backing arrays with s.config, and handlers read those copies without
+	// the lock. Editing in place would write under their feet, so the slices
+	// on the way to the changed environment are copied first.
 	changed := false
-	for i := range s.config.Projects {
-		for j := range s.config.Projects[i].Envs {
-			if s.config.Projects[i].Envs[j].ID == envID {
-				s.config.Projects[i].Envs[j].LastVersion = version
-				changed = true
+	projects := append([]Project(nil), s.config.Projects...)
+	for i := range projects {
+		for j, e := range projects[i].Envs {
+			if e.ID != envID {
+				continue
 			}
+			envs := append([]Env(nil), projects[i].Envs...)
+			envs[j].LastVersion = version
+			if params != nil {
+				envs[j].LastParams = params
+			}
+			projects[i].Envs = envs
+			changed = true
 		}
+	}
+	if changed {
+		s.config.Projects = projects
 	}
 	if !changed {
 		return

@@ -138,6 +138,7 @@ header{
   border:1px solid var(--line); color:var(--dim); font-family:var(--mono);
 }
 .mode.promote{color:var(--promo); border-color:#4A3560}
+.mode.protected{color:var(--live); border-color:#5A4520}
 
 .env{
   display:block; width:100%; text-align:left; padding:8px 16px 8px 28px;
@@ -196,6 +197,7 @@ h1{font-size:23px; font-weight:620; margin:0 0 4px; letter-spacing:-.01em}
 .btn:disabled{opacity:.45; cursor:not-allowed}
 .btn.sm{padding:4px 10px; font-size:12.5px}
 .btn.ghost{background:none}
+.btn.copied{color:var(--ok); border-color:#1F4D3A}
 
 .section-label{
   margin:30px 0 10px; color:var(--muted); font-size:13px;
@@ -224,6 +226,8 @@ h1{font-size:23px; font-weight:620; margin:0 0 4px; letter-spacing:-.01em}
 .tile-meta{font-family:var(--mono); font-size:11.5px; color:var(--dim);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .tile-warn{color:var(--live); font-size:11.5px; margin-top:3px}
+.tile-run{color:var(--ok); font-size:11.5px; margin-top:3px}
+.badge.run{color:var(--ok); border-color:#1F4D3A}
 
 /* ---------- version matrix ---------- */
 .matrix{border:1px solid var(--line); border-radius:8px; overflow:auto}
@@ -257,6 +261,13 @@ table.mx tbody tr:hover td{background:var(--raised)}
 .branch.dirty{color:var(--live); border-color:#5A4520}
 .gitline{font-size:12.5px; color:var(--muted); margin-top:10px}
 .gitline code{font-family:var(--mono); font-size:12px; color:var(--text)}
+.changes{
+  font-size:12.5px; background:var(--panel); border:1px solid var(--line); border-radius:6px;
+  padding:8px 11px; max-height:240px; overflow:auto;
+}
+.changes > div{padding:2px 0}
+.changes code{font-family:var(--mono); font-size:12px; color:var(--accent); margin-right:6px}
+.changes .row-when{margin-left:6px; font-size:11.5px}
 
 /* ---------- build history ---------- */
 .builds{border:1px solid var(--line); border-radius:8px; overflow:hidden}
@@ -337,6 +348,36 @@ input[type=text]::placeholder{color:var(--dim)}
   border-radius:6px; padding:9px 12px; font-size:12.5px; margin-bottom:14px;
 }
 
+/* ---------- build dialog: form on the left, the command on the right ---------- */
+.bgrid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:22px; align-items:start}
+.cmdcol{position:sticky; top:0}
+pre.cmdbox{
+  font-family:var(--mono); font-size:12.5px; line-height:1.55; margin:0;
+  background:var(--ink); border:1px solid var(--line); border-radius:6px;
+  padding:10px 12px; white-space:pre-wrap; word-break:break-all; color:var(--accent);
+  min-height:84px;
+}
+.cmdref{font-size:12px; color:var(--dim); margin-top:7px; word-break:break-all}
+.cmdref code, .vernote code, code.flagtext{font-family:var(--mono); font-size:12px; color:var(--text)}
+.vernote{font-size:12px; color:var(--dim); margin:-6px 0 2px}
+table.ptable{border-collapse:collapse; width:100%; font-size:13px}
+table.ptable th{
+  text-align:left; font-weight:500; padding:6px 10px 6px 0; vertical-align:top;
+  white-space:nowrap; width:1%;
+}
+table.ptable th code{font-family:var(--mono); font-size:12.5px; color:var(--text)}
+table.ptable td{padding:4px 0}
+.req{color:var(--bad); margin-left:3px}
+.pabout{font-size:11.5px; color:var(--dim); white-space:normal; max-width:180px; font-weight:400}
+
+/* ---------- parameter definitions in the settings dialogs ---------- */
+table.pdef{border-collapse:collapse; width:100%; font-size:12.5px; margin-bottom:16px}
+table.pdef th{color:var(--muted); font-weight:500; text-align:left; padding:0 6px 6px 0; white-space:nowrap}
+table.pdef td{padding:3px 6px 3px 0; vertical-align:middle}
+table.pdef td:first-child code{font-family:var(--mono); color:var(--text)}
+table.pdef input[type=text], table.pdef select{padding:6px 8px; font-size:12.5px}
+table.pdef tr.inherited input, table.pdef tr.inherited select{opacity:.55}
+
 /* ---------- key/value rows ---------- */
 .kv-row{display:flex; gap:8px; margin-bottom:7px; align-items:center}
 .kv-row input{flex:1}
@@ -407,6 +448,7 @@ fieldset > legend{font-size:12.5px; color:var(--muted); padding:0; margin-bottom
   .rail{width:100%; flex:0 0 auto; max-height:230px; border-right:none; border-bottom:1px solid var(--line)}
   .pane{padding:18px 16px 40px}
   .grid2{grid-template-columns:1fr}
+  .bgrid{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -443,6 +485,9 @@ const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
 const state = {
   config: {projects:[]},
   builds: [],
+  // docker ps, with the project/env/build each container runs filled in by
+  // the server (matchContainers in containers.go).
+  containers: [],
   buildxOk: false,
   sel: {kind:'overview'},
   open: new Set(),
@@ -454,6 +499,9 @@ const state = {
   // that starts at the top; this puts it back. `follow` means the reader is
   // at the bottom and new lines should keep it there.
   logScroll: new Map(),
+  // Change lists already read from git, per build, so the five-second
+  // re-render does not fold them back into a button.
+  changes: new Map(),
   // How many polls in a row /api/state did not answer, and when it last did.
   // Without these the screen keeps showing the state it had when the server
   // died and gives no sign that it is doing so.
@@ -486,6 +534,7 @@ const shortDigest = d => d ? d.replace(/^sha256:/,'').slice(0,12) : '';
 function kindBadge(kind){
   if (kind === 'promote') return `<span class="badge promo" title="Gắn thêm tag cho image đã có, không build lại">promote</span>`;
   if (kind === 'import')  return `<span class="badge import" title="Đọc từ image có sẵn trên máy, không phải do DIMA build">đọc vào</span>`;
+  if (kind === 'registry') return `<span class="badge import" title="Đọc từ registry — do CI, máy khác hoặc người khác đẩy lên">từ registry</span>`;
   return `<span class="badge">build</span>`;
 }
 
@@ -506,15 +555,37 @@ async function api(path, opts={}){
   return data;
 }
 
-async function copy(text, label='Đã chép'){
+// copy puts text on the clipboard and says so ON the button that was
+// pressed. A toast alone sat at the bottom edge of the window, small and
+// gone in three seconds, so pressing Chép looked like nothing happened.
+//
+// It also only claims success when there was one. The fallback used to run
+// execCommand and announce "Đã chép" whatever it returned — and the
+// clipboard API refuses outright when the window is not focused.
+async function copy(text, label='Đã chép', btn=null){
+  let ok = false;
   try {
     await navigator.clipboard.writeText(text);
+    ok = true;
   } catch {
     const ta = document.createElement('textarea');
-    ta.value = text; document.body.appendChild(ta); ta.select();
-    document.execCommand('copy'); ta.remove();
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    ta.remove();
   }
+  if (!ok) return toast('Không chép được — bôi đen dòng đó rồi bấm Ctrl+C', true);
   toast(label);
+  if (btn){
+    clearTimeout(btn._copied);
+    if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+    btn.textContent = '✓ Đã chép';
+    btn.classList.add('copied');
+    btn._copied = setTimeout(() => {
+      btn.textContent = btn.dataset.label;
+      btn.classList.remove('copied');
+    }, 1800);
+  }
 }
 
 /* ---------- model: mirrors Project.Effective in store.go ---------- */
@@ -581,20 +652,39 @@ const refOf = (p, e, v) => { const ev = effective(p, e); return repoOf(ev) + ':'
 // is no single tag for a row.
 const verLabel = (b) => (b && (b.tag || b.version)) || '';
 
+// buildEnvId mirrors Project.BuildEnvID in store.go, local-only skip included:
+// an image that never reaches a registry cannot be promoted anywhere.
 function buildEnvId(p){
   if (p.releaseMode !== 'promote') return '';
-  const envs = p.envs || [];
-  if (envs.some(e => e.id === p.sourceEnvId)) return p.sourceEnvId;
-  return envs.length ? envs[0].id : '';
+  const shipping = (p.envs || []).filter(e => !e.isOnlyLocal);
+  if (shipping.some(e => e.id === p.sourceEnvId)) return p.sourceEnvId;
+  return shipping.length ? shipping[0].id : '';
 }
-// Một môi trường local-only đứng ngoài chuỗi promote: không ai promote vào
-// nó, nó cũng không promote đi đâu, nên cách duy nhất để nó có image là tự
-// build. Cấm build ở đó là để nó rỗng vĩnh viễn.
-const canBuild = (p, envId) => {
+// Mọi môi trường đều build được. Ở dự án promote, build ngoài môi trường
+// nguồn chỉ bị nhắc là ra image khác bản đã test — mirrors
+// Project.BuildsOutsideSource in store.go. Môi trường local-only đứng ngoài
+// chuỗi promote nên không bao giờ bị nhắc.
+const outsideSource = (p, envId) => {
+  if (p.releaseMode !== 'promote') return false;
   const e = (p.envs || []).find(x => x.id === envId);
-  if (e && e.isOnlyLocal) return true;
-  return p.releaseMode !== 'promote' || buildEnvId(p) === envId;
+  if (e && e.isOnlyLocal) return false;
+  return buildEnvId(p) !== envId;
 };
+
+/* ---------- containers on this machine ---------- */
+const isRunning = c => c.state === 'running';
+const runningOfEnv = id => state.containers.filter(c => c.envId === id && isRunning(c));
+const runningOfBuild = id => state.containers.filter(c => c.buildId === id && isRunning(c));
+
+function containersHTML(list){
+  return `<div class="builds">${list.map(c => `<div class="row" style="cursor:default">
+      <span class="row-tag"><i class="dot ${isRunning(c) ? 'success' : 'canceled'}"></i><b>${esc(c.name)}</b>
+        ${c.version ? `<span class="branch" title="version của image container này đang chạy">${esc(c.version)}</span>` : ''}</span>
+      <span class="row-when" title="${esc(c.image)}">${esc(c.status)}</span>
+      <span class="row-when">${esc(c.ports || '')}</span>
+      <span class="badge" title="${esc(c.image)}">${c.version ? esc(c.id) : 'không rõ version'}</span>
+    </div>`).join('')}</div>`;
+}
 
 /* ---------- derived views over the build history ---------- */
 const buildsOfEnv = id => state.builds.filter(b => b.envId === id);
@@ -716,6 +806,7 @@ async function refresh(){
   hideOffline();
   state.config = s.config || {projects:[]};
   state.builds = s.builds || [];
+  state.containers = s.containers || [];
   state.buildxOk = !!s.buildxOk;
   $('#pulse').className = 'pulse' + (s.dockerOk ? ' on' : '');
   $('#daemon').textContent = s.dockerOk ? 'docker '+s.dockerVersion : 'không thấy docker daemon';
@@ -831,6 +922,9 @@ function toggleGroup(name){
 // localBadge đánh dấu một MÔI TRƯỜNG có image không bao giờ rời khỏi máy
 // này — build cache chẳng hạn — nằm ngay cạnh những môi trường có ship.
 const localBadge = `<span class="mode" title="Chỉ dùng trên máy này — không đẩy lên registry">chỉ máy này</span>`;
+// protectedBadge đánh dấu môi trường quan trọng: build thẳng phải xác nhận.
+const protectedBadge = `<span class="mode protected" title="Môi trường quan trọng — build thẳng ở đây phải xác nhận, đường thường đi là promote">quan trọng</span>`;
+const envBadges = e => (e.isOnlyLocal ? ' ' + localBadge : '') + (e.protected ? ' ' + protectedBadge : '');
 
 function projectHTML(p, sel, inGroup){
   const mode = p.releaseMode === 'promote'
@@ -848,7 +942,7 @@ function projectHTML(p, sel, inGroup){
       ? `<div class="env-ver">${esc(verLabel(cur))}<i class="dot ${esc(cur.status)}"></i></div>`
       : `<div class="env-ver none">chưa có bản nào</div>`;
     out.push(`<button class="env ${sel.kind==='env'&&sel.id===e.id?'sel':''}" data-env="${esc(e.id)}">
-      <div class="env-name">${esc(e.name)}${e.isOnlyLocal ? ' ' + localBadge : ''}</div>${line}${latestNoteHTML(cur, latest)}
+      <div class="env-name">${esc(e.name)}${envBadges(e)}</div>${line}${latestNoteHTML(cur, latest)}
     </button>`);
   });
   out.push(`<button class="add-env" data-addenv="${esc(p.id)}">+ Môi trường</button></div>`);
@@ -907,12 +1001,14 @@ function envTile(p, e){
     : `<div class="tile-meta">&nbsp;</div>`;
   const warn = behind > 0
     ? `<div class="tile-warn">chậm hơn bản mới nhất ${behind} phiên bản</div>` : '';
+  const running = runningOfEnv(e.id);
+  const run = running.length
+    ? `<div class="tile-run" title="${esc(running.map(c => c.name + ' — ' + c.version).join('\n'))}">▶ ${running.length} container đang chạy trên máy này</div>` : '';
   // Same rule as the rail: the dot describes the build behind the number
   // below it, and a newer build that is not that one gets its own line.
   return `<button class="tile" data-goenv="${esc(e.id)}">
-    <div class="tile-env">${esc(e.name)}${cur?`<i class="dot ${esc(cur.status)}"></i>`:''}${
-      e.isOnlyLocal ? localBadge : ''}</div>
-    ${ver}${meta}${latestNoteHTML(cur, latest)}${warn}
+    <div class="tile-env">${esc(e.name)}${cur?`<i class="dot ${esc(cur.status)}"></i>`:''}${envBadges(e)}</div>
+    ${ver}${meta}${latestNoteHTML(cur, latest)}${warn}${run}
   </button>`;
 }
 
@@ -986,7 +1082,7 @@ function renderProject(p){
   const rows = versionRows(p);
   const srcId = buildEnvId(p);
   const modeNote = p.releaseMode === 'promote'
-    ? `Build một lần ở <b>${esc((envs.find(e => e.id === srcId)||{}).name || '—')}</b>, rồi promote chính image đó sang các môi trường khác.`
+    ? `Build ở <b>${esc((envs.find(e => e.id === srcId)||{}).name || '—')}</b>, rồi promote chính image đó sang các môi trường khác. Môi trường nào cũng build riêng được khi cần.`
     : `Mỗi môi trường build lại từ mã nguồn với build args của nó.`;
 
   const head = `<tr><th>Version</th>${envs.map(e => `<th>${esc(e.name)}</th>`).join('')}</tr>`;
@@ -1004,6 +1100,8 @@ function renderProject(p){
       <div class="actions">
         ${srcId || p.releaseMode !== 'promote'
           ? `<button class="btn primary" id="doBuild">Build</button>` : ''}
+        <button class="btn" id="doRegistry" title="Đọc các tag đang có trên registry — kể cả bản do CI hoặc máy khác đẩy lên">Đọc từ registry</button>
+        <button class="btn" id="doCleanup" title="Xoá image cũ của dự án trên máy này, giữ vài bản mới nhất mỗi môi trường">Dọn image cũ</button>
         <button class="btn" id="doSettings">Cài đặt dự án</button>
         <button class="btn" id="doVersions">Lịch sử cài đặt</button>
       </div>
@@ -1014,7 +1112,14 @@ function renderProject(p){
     <div class="section-label">Lịch sử theo version <span class="count">${rows.length}</span></div>
     ${rows.length
       ? `<div class="matrix"><table class="mx"><thead>${head}</thead><tbody>${body}</tbody></table></div>`
-      : `<div class="empty"><strong>Chưa có bản build nào</strong>Bấm Build để tạo version đầu tiên.</div>`}`;
+      : `<div class="empty"><strong>Chưa có bản build nào</strong>Bấm Build để tạo version đầu tiên.</div>`}
+    ${(() => {
+      const mine = state.containers.filter(c => c.projectId === p.id);
+      return mine.length ? `<div class="section-label">Container trên máy này <span class="count">${mine.length}</span></div>
+        ${containersHTML(mine)}
+        <div class="note">Chỉ là container trên chính máy đang mở DIMA. Container báo “không rõ version” chạy một tag DIMA không ghi nhận,
+          hoặc một image mà tag của nó đã bị lần build sau kéo đi.</div>` : '';
+    })()}`;
 
   const b = $('#doBuild');
   if (b) b.onclick = () => {
@@ -1023,9 +1128,152 @@ function renderProject(p){
     buildDialog(p, target);
   };
   $('#doSettings').onclick = () => projectDialog(p);
+  $('#doRegistry').onclick = () => registryDialog(p);
+  $('#doCleanup').onclick = () => cleanupDialog(p);
   $('#doVersions').onclick = versionsDialog;
   $$('[data-goenv]').forEach(el => el.onclick = () => { state.sel = {kind:'env', id:el.dataset.goenv}; render(); });
   wireCellButtons(p);
+}
+
+/* ---------- cleaning up old local images ----------
+   Which tags go is the server's plan (planCleanup in cleanup.go), worked out
+   again when the button is pressed, so a container started in the meantime
+   saves its image by itself. Only this machine is touched, never the registry. */
+function cleanupDialog(p){
+  const m = openModal(`
+    <h2>Dọn image cũ của ${esc(p.name)}</h2>
+    <p class="sub">Chỉ xoá image trên máy này (<code>docker rmi</code>, không ép). Registry không bị đụng tới.</p>
+    <label class="f" style="max-width:260px"><span>Giữ lại mỗi môi trường</span>
+      <select id="keep">${[1,2,3,5,10].map(n => `<option value="${n}" ${n === 3 ? 'selected' : ''}>${n} bản mới nhất</option>`).join('')}</select>
+    </label>
+    <div class="note" style="margin:-6px 0 14px">Luôn giữ: bản hiện tại của mỗi môi trường, image có container đang dùng, và tag không phải phiên bản (latest, cache…).</div>
+    <div id="plan"><div class="kv-empty">Đang đọc image trên máy…</div></div>
+    <div class="modal-foot">
+      <button class="btn" id="cancel">Đóng</button>
+      <button class="btn danger" id="go" disabled>Xoá</button>
+    </div>`, true);
+  $('#cancel', m).onclick = closeModal;
+  const go = $('#go', m), keepSel = $('#keep', m);
+
+  const sync = () => {
+    const n = $$('[data-ref]:checked', m).length;
+    go.disabled = !n;
+    go.textContent = n ? `Xoá ${n} image` : 'Xoá';
+  };
+  const load = async () => {
+    $('#plan', m).innerHTML = `<div class="kv-empty">Đang đọc image trên máy…</div>`;
+    let res;
+    try { res = await api(`/api/cleanup?projectId=${encodeURIComponent(p.id)}&keep=${keepSel.value}`); }
+    catch (err) { $('#plan', m).innerHTML = `<div class="warnbox">${esc(err.message)}</div>`; return sync(); }
+    const items = res.items || [];
+    $('#plan', m).innerHTML = items.length ? `<div class="builds">${items.map(it => `<label class="hit${it.remove ? '' : ' dup'}">
+        <input type="checkbox" data-ref="${esc(it.ref)}" ${it.remove ? 'checked' : 'disabled'}>
+        <b class="hit-name">${esc(it.tag)}</b>
+        <span class="row-when">${esc(it.envName || '—')} · ${esc(it.age || '')} · ${esc(it.size || '')}</span>
+        <span class="hit-path" style="direction:ltr">${esc(it.why)}</span>
+        <span class="badge ${it.remove ? '' : 'pushed'}">${it.remove ? 'xoá' : 'giữ'}</span>
+      </label>`).join('')}</div>`
+      : `<div class="kv-empty">Máy này không có image nào của dự án.</div>`;
+    $$('[data-ref]', m).forEach(c => c.onchange = sync);
+    sync();
+  };
+  keepSel.onchange = load;
+  load();
+
+  go.onclick = async () => {
+    const refs = $$('[data-ref]:checked', m).map(c => c.dataset.ref);
+    if (!confirm(`Xoá ${refs.length} image khỏi máy này? Bản trên registry vẫn còn, cần thì pull lại được.`)) return;
+    go.disabled = true; go.textContent = 'Đang xoá…';
+    try {
+      const res = await api('/api/cleanup', {method:'POST', body:JSON.stringify({projectId: p.id, keep: +keepSel.value, refs})});
+      const bad = (res.results || []).filter(r => !r.ok);
+      const ok = (res.results || []).length - bad.length;
+      if (bad.length){
+        // Re-read the plan: the removed tags are gone from it, and what is
+        // left reflects the machine now, not the list from before the run.
+        const report = `<div class="warnbox">Đã xoá ${ok}. ${bad.length} image không xoá được:<br>${
+          bad.map(r => `<code>${esc(r.ref)}</code> — ${esc(r.error)}`).join('<br>')}</div>`;
+        await load();
+        $('#plan', m).insertAdjacentHTML('afterbegin', report);
+      } else {
+        closeModal();
+        toast(`Đã xoá ${ok} image`);
+      }
+      refresh();
+    } catch (err) { toast(err.message, true); sync(); }
+  };
+}
+
+/* ---------- registry: what is actually out there ----------
+   The history only knows what DIMA itself built or promoted. This reads the
+   registry and offers every tag it does not know yet — pushed by CI, by a
+   colleague, from another machine — to be written into the history. The
+   digest comes from the registry, so such a version can be promoted at once. */
+async function registryDialog(p){
+  const m = openModal(`
+    <h2>Đọc từ registry</h2>
+    <p class="sub">Các tag đang có trên registry của ${esc(p.name)}, xếp vào môi trường theo tiền tố tag.
+      Dùng thông tin <code>docker login</code> đã lưu trên máy này.</p>
+    <div id="reg"><div class="kv-empty">Đang đọc registry…</div></div>
+    <div class="modal-foot">
+      <button class="btn" id="cancel">Đóng</button>
+      <button class="btn primary" id="go" disabled>Ghi vào lịch sử</button>
+    </div>`, true);
+  $('#cancel', m).onclick = closeModal;
+
+  let res;
+  try { res = await api('/api/registry/tags?projectId=' + encodeURIComponent(p.id)); }
+  catch (err) { $('#reg', m).innerHTML = `<div class="warnbox">${esc(err.message)}</div>`; return; }
+
+  const repos = res.repos || [];
+  if (!repos.length){
+    $('#reg', m).innerHTML = `<div class="kv-empty">Dự án không có môi trường nào đẩy lên registry.</div>`;
+    return;
+  }
+  $('#reg', m).innerHTML = repos.map(r => {
+    if (r.error) return `<div class="section-label" style="margin:6px 0 8px">${esc(r.repo)}</div>
+      <div class="warnbox">${esc(r.error)}</div>`;
+    const fresh = r.rows.filter(x => !x.known).length;
+    const rows = r.rows.map(x => `<label class="hit${x.known ? ' dup' : ''}">
+        <input type="checkbox" data-key="${esc(x.envId + '|' + x.tag)}" ${x.known ? 'disabled' : 'checked'}>
+        <b class="hit-name">${esc(x.tag)}</b>
+        <span class="row-when">${esc(x.envName)} · ${esc(fmt(x.pushedAt))}</span>
+        <span class="hit-path" title="${esc(x.digest)}">${esc(shortDigest(x.digest) || 'không rõ digest')}</span>
+        ${x.drifted ? `<span class="badge" style="color:var(--live);border-color:#5A4520"
+            title="Lịch sử ghi ${esc(x.drifted)} — tag này đã bị đẩy đè từ nơi khác">khác lịch sử</span>` : ''}
+        <span class="badge ${x.known ? '' : 'pushed'}">${x.known ? 'đã có' : 'mới'}</span>
+      </label>`).join('');
+    const drift = r.rows.filter(x => x.drifted);
+    return `<div class="section-label" style="margin:6px 0 8px">${esc(r.repo)}
+        <span class="count">${r.rows.length} tag · ${fresh} chưa có trong lịch sử</span></div>
+      ${drift.length ? `<div class="warnbox">${drift.map(x => `<b>${esc(x.tag)}</b>`).join(', ')} trên registry đang trỏ vào
+        image khác với lịch sử DIMA ghi lại — tag đã bị đẩy đè từ máy khác hoặc CI. Bản đang chạy có thể không phải bản bạn nghĩ.</div>` : ''}
+      ${r.rows.length ? `<div class="builds">${rows}</div>` : `<div class="kv-empty">Không có tag nào khớp tiền tố của môi trường.</div>`}
+      ${r.unmatched.length ? `<div class="note" style="margin:8px 0 14px">Không khớp tiền tố môi trường nào:
+        ${r.unmatched.slice(0, 12).map(u => `<code>${esc(u.tag)}</code>`).join(', ')}${r.unmatched.length > 12 ? ` và ${r.unmatched.length - 12} tag khác` : ''}
+        — đổi tiền tố tag trong Cài đặt môi trường nếu chúng thuộc về một môi trường.</div>` : ''}`;
+  }).join('');
+
+  const go = $('#go', m);
+  const sync = () => {
+    const n = $$('[data-key]:checked', m).length;
+    go.disabled = !n;
+    go.textContent = n ? `Ghi ${n} bản vào lịch sử` : 'Ghi vào lịch sử';
+  };
+  $$('[data-key]', m).forEach(c => c.onchange = sync);
+  sync();
+
+  go.onclick = async () => {
+    go.disabled = true; go.textContent = 'Đang ghi…';
+    try {
+      const out = await api('/api/registry/import', {method:'POST', body:JSON.stringify({
+        projectId: p.id, keys: $$('[data-key]:checked', m).map(c => c.dataset.key),
+      })});
+      closeModal();
+      toast(`Đã ghi ${out.added} bản từ registry`);
+      await refresh();
+    } catch (err) { toast(err.message, true); sync(); }
+  };
 }
 
 function cellHTML(p, e, version, b){
@@ -1034,18 +1282,18 @@ function cellHTML(p, e, version, b){
     const push = b.pushed
       ? `<span class="badge pushed">đã push</span>`
       : `<span class="badge">chỉ có trên máy</span>`;
-    return `<div class="cell"><i class="dot ${b.status}"></i>${push}${kind}</div>`;
+    const running = runningOfBuild(b.id);
+    const run = running.length
+      ? `<span class="badge run" title="${esc(running.map(c => c.name).join(', '))}">▶ đang chạy</span>` : '';
+    return `<div class="cell"><i class="dot ${b.status}"></i>${push}${kind}${run}</div>`;
   }
+  // Promote đứng trước khi có nguồn đã push: nó đưa đúng image đã test.
+  // Build vẫn có bên cạnh, cho lúc môi trường này cần một bản của riêng nó.
   const src = promoteSource(p, version, e.id);
-  if (src){
-    return `<div class="cell"><button class="btn sm" data-promote="${esc(src.id)}" data-target="${esc(e.id)}"
-      data-version="${esc(version)}">Promote</button></div>`;
-  }
-  if (canBuild(p, e.id)){
-    return `<div class="cell"><button class="btn sm ghost" data-buildver="${esc(e.id)}"
+  const promote = src ? `<button class="btn sm" data-promote="${esc(src.id)}" data-target="${esc(e.id)}"
+      data-version="${esc(version)}">Promote</button>` : '';
+  return `<div class="cell">${promote}<button class="btn sm ghost" data-buildver="${esc(e.id)}"
       data-version="${esc(version)}">Build</button></div>`;
-  }
-  return `<div class="cell cell-empty">—</div>`;
 }
 
 function wireCellButtons(p){
@@ -1064,7 +1312,7 @@ function wireCellButtons(p){
 function renderEnv(p, e){
   const ev = effective(p, e);
   const list = buildsOfEnv(e.id);
-  const allowed = canBuild(p, e.id);
+  const outside = outsideSource(p, e.id);
   const srcName = (( p.envs || []).find(x => x.id === buildEnvId(p)) || {}).name || '—';
 
   $('#pane').innerHTML = `
@@ -1073,14 +1321,19 @@ function renderEnv(p, e){
         <h1>${esc(e.name)}</h1>
         <div class="ref">${esc(repoOf(ev))}:${esc(tagOf(ev, e.lastVersion || 'VERSION'))}</div>
         <div class="note">Thuộc dự án <b>${esc(p.name)}</b>${
-          allowed ? '' : ` · chỉ nhận promote từ <b>${esc(srcName)}</b>`}</div>
+          outside ? ` · thường nhận promote từ <b>${esc(srcName)}</b>` : ''}</div>
       </div>
       <div class="actions">
-        ${allowed ? `<button class="btn primary" id="doBuild">Build</button>` : ''}
+        <button class="btn primary" id="doBuild">Build</button>
         <button class="btn" id="doEnvSettings">Cài đặt môi trường</button>
         <button class="btn" id="doProjSettings">Cài đặt dự án</button>
       </div>
     </div>
+    ${(() => {
+      const mine = state.containers.filter(c => c.envId === e.id);
+      return mine.length ? `<div class="section-label">Container trên máy này <span class="count">${mine.length}</span></div>
+        ${containersHTML(mine)}` : '';
+    })()}
     <div class="section-label">Các bản đã về ${esc(e.name)} <span class="count">${list.length}</span></div>
     <div id="buildList"></div>`;
 
@@ -1094,9 +1347,9 @@ function renderEnv(p, e){
 function renderBuilds(p, e, list){
   const host = $('#buildList');
   if (!list.length){
-    const hint = canBuild(p, e.id)
-      ? `Bấm Build để tạo bản đầu tiên cho ${esc(e.name)}.`
-      : `Promote một bản từ môi trường nguồn để đưa image về đây.`;
+    const hint = outsideSource(p, e.id)
+      ? `Promote một bản từ môi trường nguồn để đưa image về đây, hoặc bấm Build để build riêng.`
+      : `Bấm Build để tạo bản đầu tiên cho ${esc(e.name)}.`;
     host.innerHTML = `<div class="empty"><strong>Chưa có bản nào</strong>${hint}</div>`;
     return;
   }
@@ -1122,7 +1375,7 @@ function renderBuilds(p, e, list){
     };
   });
   $$('[data-copy]', host).forEach(el => {
-    el.onclick = ev => { ev.stopPropagation(); copy(el.dataset.copy, 'Đã chép'); };
+    el.onclick = ev => { ev.stopPropagation(); copy(el.dataset.copy, 'Đã chép', el); };
   });
   $$('[data-push]', host).forEach(el => {
     el.onclick = async ev => {
@@ -1149,6 +1402,28 @@ function renderBuilds(p, e, list){
       state.logText.delete(el.dataset.del);
       state.logScroll.delete(el.dataset.del);
       await refresh();
+    };
+  });
+  $$('[data-changes]', host).forEach(el => {
+    el.onclick = async ev => {
+      ev.stopPropagation();
+      const id = el.dataset.changes;
+      el.disabled = true; el.textContent = 'Đang đọc git…';
+      let html;
+      try {
+        const res = await api(`/api/build/${id}/changes`);
+        const since = res.fromVersion ? `từ <code>${esc(res.fromVersion)}</code> (${esc(res.from)}) tới ${esc(res.to)}` : `tới ${esc(res.to)} — chưa có bản trước để so`;
+        html = !res.commits.length
+          ? `<div class="gitline">Không có commit mới ${since}: cùng mã nguồn với bản trước.</div>`
+          : `<div class="gitline" style="margin:0 0 6px">${res.commits.length}${res.truncated ? '+' : ''} commit ${since}</div>
+             <div class="changes">${res.commits.map(c => `<div><code>${esc(c.hash)}</code> ${esc(c.subject)}
+               <span class="row-when">${esc(c.author)} · ${esc(c.date)}</span></div>`).join('')}</div>`;
+      } catch (err) {
+        html = `<div class="pathinfo bad" style="margin:0">${esc(err.message)}</div>`;
+      }
+      state.changes.set(id, html);
+      const box = document.getElementById('chg-' + id);
+      if (box) box.innerHTML = html;
     };
   });
   $$('[data-sendto]', host).forEach(el => {
@@ -1226,6 +1501,11 @@ function detailHTML(p, e, b){
         b.commit ? ` · commit <code>${esc(b.commit)}</code>` : ''}${
         b.kind === 'promote' ? ' · thừa hưởng từ bản gốc, vì promote không build lại' : ''}</div>
       ${b.dirty ? `<div class="pathinfo bad" style="margin:6px 0 0">Lúc build còn thay đổi chưa commit — bản này không khớp commit nào, không dựng lại được từ repo.</div>` : ''}
+    </div>` : ''}
+    ${b.commit ? `<div class="field">
+      <div class="field-name">Thay đổi so với bản trước ở ${esc(e.name)}</div>
+      <div id="chg-${esc(b.id)}">${state.changes.get(b.id) ??
+        `<button class="btn sm" data-changes="${esc(b.id)}">Xem các commit</button>`}</div>
     </div>` : ''}
     <div class="field">
       <div class="field-name">Tag trên registry</div>
@@ -1328,53 +1608,193 @@ function newestVersion(p){
   return rows.length ? rows[0].version : '';
 }
 
-function buildDialog(p, e, preset){
-  if (!canBuild(p, e.id)){
-    return toast(`${p.name} chạy kiểu promote, chỉ build được ở môi trường nguồn`, true);
+// lastVersionOfEnv is the version this environment last built or received.
+// The version box is about THIS environment: production's next number
+// follows production's last one, not whatever staging tried this morning.
+function lastVersionOfEnv(e){
+  const b = buildsOfEnv(e.id).find(x => x.version);
+  return (b && b.version) || e.lastVersion || '';
+}
+
+// paramInputHTML draws the value box a parameter asks for, by its kind.
+function paramInputHTML(f){
+  const id = 'pv-' + f.name;
+  if (f.kind === 'flag'){
+    return `<label class="check"><input type="checkbox" id="${esc(id)}" data-pv="${esc(f.name)}" ${f.value === 'true' ? 'checked' : ''}>
+      <code class="flagtext">${esc(f.options || '(chưa khai chữ chèn vào)')}</code></label>`;
   }
-  const ev = effective(p, e);
-  const last = preset || newestVersion(p) || e.lastVersion || '';
+  if (f.kind === 'choice'){
+    const opts = (f.options || '').split(',').map(s => s.trim()).filter(Boolean);
+    // With no empty option a <select> shows its first entry while the value
+    // is really "", or a remembered value the list no longer offers. A
+    // visible placeholder keeps what is on screen equal to what is sent.
+    const missing = !opts.includes(f.value);
+    return `<select id="${esc(id)}" data-pv="${esc(f.name)}">
+      ${f.required
+        ? (missing ? `<option value="" selected disabled>— chọn —</option>` : '')
+        : `<option value="" ${missing ? 'selected' : ''}>— để trống —</option>`}
+      ${opts.map(o => `<option value="${esc(o)}" ${o === f.value ? 'selected' : ''}>${esc(o)}</option>`).join('')}
+    </select>`;
+  }
+  return `<input type="text" id="${esc(id)}" data-pv="${esc(f.name)}" value="${esc(f.value)}"
+    placeholder="${esc(f.default ? 'mặc định: ' + f.default : (f.required ? 'bắt buộc' : 'để trống được'))}" autocomplete="off">`;
+}
+
+function buildDialog(p, e, preset){
+  const envLast = lastVersionOfEnv(e);
+  const newest = newestVersion(p);
+  const start = preset || envLast || newest || '';
   const m = openModal(`
     <h2>Build ${esc(e.name)}</h2>
     <p class="sub">Dự án ${esc(p.name)}</p>
-    <label class="f"><span>Version của dự án</span>
-      <input type="text" id="ver" value="${esc(preset || last || '')}" placeholder="1.0.0" autocomplete="off">
-    </label>
-    <div class="suggest" id="chips"></div>
-    <div class="preview" id="preview"></div>
-    <div id="gitbox"></div>
-    ${e.isOnlyLocal ? '' : `<label class="check" style="margin-top:16px">
-      <input type="checkbox" id="push" ${e.autoPush?'checked':''}> Push lên registry sau khi build xong
-    </label>`}
+    <div id="outside"></div>
+    <div class="bgrid">
+      <div>
+        <label class="f"><span>Version của dự án</span>
+          <input type="text" id="ver" value="${esc(start)}" placeholder="1.0.0" autocomplete="off">
+        </label>
+        <div class="vernote">${envLast
+          ? `Lần trước ở ${esc(e.name)}: <code>${esc(envLast)}</code>`
+          : `${esc(e.name)} chưa có bản nào`}${newest && newest !== envLast
+          ? ` · mới nhất của dự án: <code>${esc(newest)}</code>` : ''}</div>
+        <div class="suggest" id="chips"></div>
+        <div id="params"></div>
+        ${e.isOnlyLocal ? '' : `<label class="check" style="margin-top:16px">
+          <input type="checkbox" id="push" ${e.autoPush?'checked':''}> Push lên registry sau khi build xong
+        </label>`}
+        <div id="gitbox"></div>
+        <div id="confirmbox"></div>
+      </div>
+      <div class="cmdcol">
+        <div class="field-name">Lệnh sẽ chạy</div>
+        <pre class="cmdbox" id="cmd">đang tính…</pre>
+        <div class="cmdref">Image: <code id="refline"></code></div>
+        <div id="problems"></div>
+        <button class="btn sm" id="copycmd" style="margin-top:10px">Chép lệnh</button>
+      </div>
+    </div>
     <div class="modal-foot">
       <button class="btn" id="cancel">Hủy</button>
-      <button class="btn primary" id="go">Bắt đầu build</button>
-    </div>`);
+      <button class="btn primary" id="go" disabled>Bắt đầu build</button>
+    </div>`, true);
 
-  const ver = $('#ver', m);
-  const preview = () => {
-    const v = ver.value.trim() || last;
-    $('#preview', m).textContent = repoOf(ev) + ':' + tagOf(ev, v);
+  const ver = $('#ver', m), go = $('#go', m);
+  const pushChk = () => { const c = $('#push', m); return c ? c.checked : false; };
+  // null until the first answer: the table is drawn from the server's list,
+  // and the values typed afterwards are sent back to it.
+  let fields = null, lastPlan = null, issuesNow = [], seq = 0, timer;
+
+  const values = () => {
+    const out = {};
+    $$('[data-pv]', m).forEach(el => {
+      out[el.dataset.pv] = el.type === 'checkbox' ? (el.checked ? 'true' : 'false') : el.value;
+    });
+    return out;
   };
-  $('#chips', m).innerHTML = nextVersions(last).map(t => `<button class="chip" data-t="${esc(t)}">${esc(t)}</button>`).join('');
-  $$('[data-t]', $('#chips', m)).forEach(c => c.onclick = () => { ver.value = c.dataset.t; preview(); ver.focus(); });
-  ver.oninput = preview;
-  preview();
+
+  const drawParams = () => {
+    const host = $('#params', m);
+    if (!fields || !fields.length){ host.innerHTML = ''; return; }
+    host.innerHTML = `<div class="field-name" style="margin-top:16px">Tham số</div>
+      <table class="ptable"><tbody>${fields.map(f => `<tr>
+        <th title="${esc(f.about || '')}"><code>{${esc(f.name)}}</code>${f.required ? '<span class="req" title="bắt buộc">*</span>' : ''}
+          ${f.about ? `<div class="pabout">${esc(f.about)}</div>` : ''}</th>
+        <td>${paramInputHTML(f)}</td>
+      </tr>`).join('')}</tbody></table>`;
+    $$('[data-pv]', host).forEach(el => { el.oninput = schedule; el.onchange = schedule; });
+  };
+
+  // The preview is the server's planBuild — the same function the build
+  // runs — so what is shown here is what will run, character for character.
+  const ask = async () => {
+    const mine = ++seq;
+    let plan;
+    try {
+      // Same fallback as the Build button, so an emptied box previews the
+      // version that would actually be built.
+      plan = await api('/api/build/preview', {method:'POST', body:JSON.stringify({
+        envId: e.id, version: ver.value.trim() || start, push: pushChk(),
+        params: fields ? values() : undefined,
+      })});
+    } catch (err) {
+      if (mine === seq){ $('#cmd', m).textContent = err.message; go.disabled = true; }
+      return;
+    }
+    if (mine !== seq) return; // a newer keystroke already asked
+    lastPlan = plan;
+    if (!fields){
+      fields = plan.params || [];
+      drawParams();
+      // The first preview ran on the server's starting values; from here on
+      // the boxes on screen are the truth, so ask once more with them.
+      if (fields.length) schedule();
+    }
+    $('#cmd', m).textContent = (plan.steps || [plan.command]).join('\n');
+    $('#refline', m).textContent = plan.ref;
+    const issues = [
+      ...(plan.blocked || []),
+      ...(plan.problems || []).map(x => 'chưa điền tham số bắt buộc: ' + x),
+    ];
+    $('#problems', m).innerHTML = issues.length
+      ? `<div class="warnbox" style="margin:10px 0 0">${issues.map(esc).join('<br>')}</div>` : '';
+    const src = promoteSource(p, ver.value.trim(), e.id);
+    $('#outside', m).innerHTML = plan.outsideSource
+      ? `<div class="warnbox">Dự án này thường build ở <b>${esc(((p.envs||[]).find(x => x.id === buildEnvId(p))||{}).name || 'môi trường nguồn')}</b>
+          rồi promote. Build riêng ở ${esc(e.name)} sẽ ra một image mới, khác digest với bản đã test.
+          ${src ? `<div style="margin-top:8px">Version ${esc(src.version)} đã có bản đẩy lên ở ${esc(src.envName)}.
+            <button class="btn sm" id="viaPromote" style="margin-left:6px">Promote bản đó thay vì build</button></div>` : ''}</div>`
+      : '';
+    const via = $('#viaPromote', m);
+    if (via) via.onclick = () => promoteDialog(p, src, e, src.version);
+    // A protected environment: the box is drawn once and keeps its tick
+    // across previews. The server refuses the build without it, too.
+    const cbox = $('#confirmbox', m);
+    if (plan.needsConfirm && !$('#confirm', m)){
+      const why = plan.confirmWhy.charAt(0).toUpperCase() + plan.confirmWhy.slice(1);
+      cbox.innerHTML = `<div class="warnbox" style="margin-top:14px">${esc(why)}.
+        <label class="check" style="margin-top:8px; color:var(--live)"><input type="checkbox" id="confirm">
+          Tôi hiểu, vẫn build thẳng lên ${esc(e.name)}</label></div>`;
+      $('#confirm', m).onchange = syncGo;
+    }
+    issuesNow = issues;
+    syncGo();
+  };
+  function syncGo(){
+    const unconfirmed = lastPlan && lastPlan.needsConfirm && !($('#confirm', m) || {}).checked;
+    go.disabled = issuesNow.length > 0 || !!unconfirmed;
+  }
+  function schedule(){ clearTimeout(timer); timer = setTimeout(ask, 150); }
+
+  const base = envLast || newest;
+  const chips = nextVersions(base).map(t => ({t, why: base ? `kế tiếp của ${base}` : 'theo thời gian'}));
+  // Bản mới nhất của dự án mà môi trường này chưa có: build lại đúng số đó
+  // ở đây là việc hay gặp nhất khi build riêng từng môi trường.
+  if (newest && newest !== envLast) chips.unshift({t: newest, why: 'bản mới nhất của dự án'});
+  // The newest version is often also the next minor of this environment's.
+  const seen = new Set();
+  $('#chips', m).innerHTML = chips.filter(c => !seen.has(c.t) && seen.add(c.t)).map(c => `<button class="chip" data-t="${esc(c.t)}" title="${esc(c.why)}">${esc(c.t)}</button>`).join('');
+  $$('[data-t]', $('#chips', m)).forEach(c => c.onclick = () => { ver.value = c.dataset.t; schedule(); ver.focus(); });
+  ver.oninput = schedule;
+  if ($('#push', m)) $('#push', m).onchange = schedule;
+  ask();
   ver.focus();
   // Giá trị đã điền sẵn là version cũ — chọn hết để gõ số mới là ghi đè
   // ngay, khỏi phải tự xoá; Enter không gõ gì thì vẫn build đúng version đó.
   ver.select();
   showBranch(p, e, $('#gitbox', m));
   $('#cancel', m).onclick = closeModal;
-  ver.onkeydown = ev2 => { if (ev2.key === 'Enter') $('#go', m).click(); };
+  $('#copycmd', m).onclick = () => lastPlan && copy((lastPlan.steps || [lastPlan.command]).join('\n'), 'Đã chép lệnh', $('#copycmd', m));
+  ver.onkeydown = ev2 => { if (ev2.key === 'Enter' && !go.disabled) go.click(); };
 
-  $('#go', m).onclick = async () => {
-    const btn = $('#go', m);
+  go.onclick = async () => {
+    const btn = go;
     btn.disabled = true; btn.textContent = 'Đang khởi động…';
     try {
-      const pushChk = $('#push', m);
+      const confirmChk = $('#confirm', m);
       const b = await api('/api/build', {method:'POST', body:JSON.stringify({
-        envId: e.id, version: ver.value.trim() || last, push: pushChk ? pushChk.checked : false
+        envId: e.id, version: ver.value.trim() || start, push: pushChk(),
+        params: fields ? values() : undefined,
+        confirm: !!(confirmChk && confirmChk.checked),
       })});
       closeModal();
       state.sel = {kind:'env', id:e.id};
@@ -1441,7 +1861,7 @@ function promoteDialog(p, src, target, version){
   const m = openModal(`
     <h2>Đưa version ${esc(version || src.version)} sang môi trường khác</h2>
     <p class="sub">Không build lại. Image giữ nguyên digest, chỉ được gắn thêm tag mới.</p>
-    ${state.buildxOk ? '' : `<div class="warnbox">Máy này không có <code>docker buildx</code>, nên image sẽ phải kéo về rồi đẩy lên lại. Chậm hơn, và manifest đa kiến trúc sẽ bị rút về một nền tảng.</div>`}
+    ${state.buildxOk ? '' : `<div class="warnbox">Máy này không có <code>docker buildx</code> 0.12 trở lên, nên image sẽ phải kéo về rồi đẩy lên lại. Chậm hơn, và manifest đa kiến trúc sẽ bị rút về một nền tảng.</div>`}
     <label class="f"><span>Nguồn — ${esc(src.envName)}</span>
       <input type="text" value="${esc(src.ref)}" readonly></label>
     <div class="inherited">digest ${esc(src.digest || '—')}</div>
@@ -1521,7 +1941,7 @@ async function buildVars(){
 
 // mountVarHelp shows the placeholders under the command box, and previews
 // the command as it will actually be run.
-async function mountVarHelp(input, host){
+async function mountVarHelp(input, host, inheritedCmd){
   if (!host) return;
   const vars = await buildVars();
   const chips = vars.map(v =>
@@ -1530,7 +1950,9 @@ async function mountVarHelp(input, host){
   const draw = () => {
     const cmd = input.value.trim();
     if (!cmd){
-      host.innerHTML = `<div class="varnote">Để trống thì DIMA chạy <code>docker build</code> như bình thường.</div>`;
+      host.innerHTML = inheritedCmd
+        ? `<div class="varnote">Để trống thì dùng lệnh của dự án.</div>`
+        : `<div class="varnote">Để trống thì DIMA chạy <code>docker build</code> như bình thường.</div>`;
       return;
     }
     // {version} đã bỏ. Lệnh cũ còn dùng nó sẽ bị từ chối lúc build, nên nói
@@ -1549,11 +1971,108 @@ async function mountVarHelp(input, host){
       const at = input.selectionStart ?? input.value.length;
       input.value = input.value.slice(0, at) + '{' + b.dataset.var + '}' + input.value.slice(at);
       input.focus();
-      draw();
+      // An event, not a direct draw(): the parameter table listens too.
+      input.dispatchEvent(new Event('input'));
     });
   };
   input.oninput = draw;
   draw();
+}
+
+/* ---------- parameter definitions ----------
+   Every {name} in the command that DIMA does not fill in itself is a
+   parameter the build dialog asks for. This table says how to ask: as text,
+   a dropdown or a checkbox, with what default, and whether it may be left
+   empty. A placeholder with no row is still asked for, as optional text. */
+
+// commandParamsOf mirrors commandParams in command.go.
+async function commandParamsOf(cmd){
+  const builtin = new Set((await buildVars()).map(v => v.name).concat(['version']));
+  const out = [];
+  for (const m of String(cmd || '').matchAll(/\{([A-Za-z][A-Za-z0-9_-]*)\}/g)){
+    if (!builtin.has(m[1]) && !out.includes(m[1])) out.push(m[1]);
+  }
+  return out;
+}
+
+const PARAM_KINDS = [['text','Ô chữ'], ['choice','Chọn từ danh sách'], ['flag','Ô tick']];
+
+// mountParamDefs keeps `rows` (the level's own Param rows, edited in place)
+// in step with the placeholders of the command being typed. `cmdOf` gives
+// the command in effect; `inherited` is the project's rows when editing an
+// environment, whose own rows then only override.
+function mountParamDefs(host, cmdInput, rows, cmdOf, inherited){
+  let names = [];
+  const own = name => rows.find(r => r.name === name);
+  const inh = name => (inherited || []).find(r => r.name === name);
+
+  const optsHint = k => k === 'choice' ? 'a, b, c' : k === 'flag' ? 'chữ chèn vào khi tick, vd -NoCache' : '';
+  const defaultCell = (r, dis) => r.kind === 'flag'
+    ? `<select data-k="default" ${dis}><option value="false">không tick</option>
+        <option value="true" ${r.default === 'true' ? 'selected' : ''}>tick sẵn</option></select>`
+    : `<input type="text" data-k="default" value="${esc(r.default || '')}" placeholder="để trống" ${dis}>`;
+
+  const draw = () => {
+    if (!names.length){
+      host.innerHTML = cmdOf()
+        ? `<div class="varnote" style="margin:-6px 0 16px">Lệnh chưa có tham số nào của riêng bạn. Gõ thêm <code>{tên}</code>
+            — ví dụ <code>-Cache {cache}</code> — để build hỏi nó trong một bảng.</div>`
+        : '';
+      return;
+    }
+    host.innerHTML = `<div class="field-name">Tham số của lệnh — hộp thoại Build sẽ hỏi từng cái</div>
+      <div style="overflow-x:auto"><table class="pdef"><thead><tr>
+        ${inherited ? '<th title="Khai riêng cho môi trường này, thay cho dòng của dự án">Riêng</th>' : ''}
+        <th>Tham số</th><th>Kiểu</th><th>Mặc định</th><th>Lựa chọn</th><th title="Không cho build khi còn trống">Bắt buộc</th><th>Ghi chú</th>
+      </tr></thead><tbody>${names.map(name => {
+        const mine = own(name);
+        const r = mine || inh(name) || {name, kind:'text'};
+        const dis = inherited && !mine ? 'disabled' : '';
+        const kind = r.kind || 'text';
+        return `<tr data-row="${esc(name)}" class="${dis ? 'inherited' : ''}">
+          ${inherited ? `<td><input type="checkbox" data-own ${mine ? 'checked' : ''}></td>` : ''}
+          <td><code>{${esc(name)}}</code></td>
+          <td><select data-k="kind" ${dis}>${PARAM_KINDS.map(([v, l]) =>
+            `<option value="${v}" ${v === kind ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+          <td>${defaultCell({...r, kind}, dis)}</td>
+          <td><input type="text" data-k="options" value="${esc(r.options || '')}" placeholder="${esc(optsHint(kind))}"
+            ${kind === 'text' ? 'disabled' : dis}></td>
+          <td style="text-align:center"><input type="checkbox" data-k="required" ${r.required ? 'checked' : ''}
+            ${kind === 'flag' ? 'disabled title="Ô tick không có khái niệm còn trống"' : dis}></td>
+          <td><input type="text" data-k="about" value="${esc(r.about || '')}" placeholder="hiện cạnh ô khi build" ${dis}></td>
+        </tr>`;
+      }).join('')}</tbody></table></div>`;
+
+    $$('tr[data-row]', host).forEach(tr => {
+      const name = tr.dataset.row;
+      const ownBox = $('[data-own]', tr);
+      if (ownBox) ownBox.onchange = () => {
+        if (ownBox.checked) rows.push({...(inh(name) || {name, kind:'text'}), name});
+        else rows.splice(rows.findIndex(r => r.name === name), 1);
+        draw();
+      };
+      $$('[data-k]', tr).forEach(el => {
+        const k = el.dataset.k;
+        const set = () => {
+          let r = own(name);
+          if (!r){ r = {name, kind:'text'}; rows.push(r); }
+          r[k] = el.type === 'checkbox' ? el.checked : el.value;
+          // A kind change changes what the other cells mean, so redraw them.
+          if (k === 'kind'){ if (r.kind === 'flag') r.required = false; draw(); }
+        };
+        el.oninput = set; el.onchange = set;
+      });
+    });
+  };
+
+  const sync = async () => { names = await commandParamsOf(cmdOf()); draw(); };
+  cmdInput.addEventListener('input', sync);
+  sync();
+  // What the caller saves: rows for placeholders that are still in a command.
+  return extraNames => {
+    const keep = new Set([...names, ...(extraNames || [])]);
+    return rows.filter(r => keep.has(r.name));
+  };
 }
 
 /* ---------- folder picker ---------- */
@@ -1708,7 +2227,7 @@ function projectDialog(p){
             <option value="promote" ${draft.releaseMode==='promote'?'selected':''}>Build một lần rồi promote</option>
           </select></label>
       </div>
-      <label class="f" id="src-wrap"><span>Môi trường nguồn — nơi duy nhất được build</span>
+      <label class="f" id="src-wrap"><span>Môi trường nguồn — nơi build chính, các môi trường khác nhận promote từ đây</span>
         <select id="f-src">${envs.map(e => `<option value="${esc(e.id)}" ${e.id===buildEnvId(p)?'selected':''}>${esc(e.name)}</option>`).join('')}</select>
       </label>
     </div>
@@ -1734,10 +2253,11 @@ function projectDialog(p){
     </label>
     <label class="f"><span>Cờ thêm cho docker build</span><input type="text" id="f-extra" value="${esc(draft.extraFlags||'')}" placeholder="--no-cache"></label>
     <label class="f"><span>Lệnh build riêng — để trống thì chạy <code>docker build</code></span>
-      <input type="text" id="f-cmd" value="${esc(draft.buildCommand||'')}" placeholder="./build.ps1 {tag}"></label>
+      <input type="text" id="f-cmd" value="${esc(draft.buildCommand||'')}" placeholder="./build.ps1 -Ref {ref} -Cache {cache}"></label>
     <div class="varhelp" id="varhelp"></div>
+    <div id="paramdefs"></div>
     ${kvBlock('Build args chung — môi trường có thể ghi đè từng key')}
-    ${kvBlock('Labels chung — môi trường có thể ghi đè từng key')}
+    ${kvBlock('Labels chung — môi trường có thể ghi đè từng key. DIMA tự gắn thêm version, commit, nhánh và môi trường build (org.opencontainers.image.*, dima.*); khai cùng key ở đây để ghi đè')}
     <div class="modal-foot">
       <button class="btn danger left" id="rm">Xóa dự án</button>
       <button class="btn" id="cancel">Hủy</button>
@@ -1755,6 +2275,9 @@ function projectDialog(p){
   const group = mountGroupPicker(m, 'f-group');
 
   mountVarHelp($('#f-cmd', m), $('#varhelp', m));
+  draft.params = draft.params || [];
+  const paramsToSave = mountParamDefs($('#paramdefs', m), $('#f-cmd', m), draft.params,
+    () => $('#f-cmd', m).value.trim());
 
   const recheck = mountPath($('#f-ctx', m), $('#pick-ctx', m), $('#info-ctx', m),
     () => $('#f-df', m).value.trim(),
@@ -1795,6 +2318,10 @@ function projectDialog(p){
     });
     draft.buildArgs = draft.buildArgs.filter(r => r.key.trim());
     draft.labels = draft.labels.filter(r => r.key.trim());
+    // A row an environment's own command still uses is kept even when the
+    // project's command no longer mentions it: the environment inherits it.
+    const envNames = (await Promise.all((p.envs || []).map(x => commandParamsOf(x.buildCommand)))).flat();
+    draft.params = paramsToSave(envNames);
     const c = cloneConfig();
     c.projects = c.projects.map(x => x.id === p.id ? draft : x);
     try { await saveConfig(c, 'Đã lưu cài đặt dự án'); closeModal(); }
@@ -1822,6 +2349,10 @@ function envDialog(p, e){
       Chỉ dùng trên máy này — không đẩy lên registry
     </label>
     <div id="local-note"></div>
+    <label class="check" id="protected-check" style="margin:8px 0 4px">
+      <input type="checkbox" id="f-protected" ${draft.protected?'checked':''}>
+      Môi trường quan trọng (production) — build thẳng ở đây phải xác nhận, đường thường đi là promote
+    </label>
     <div class="section-label" style="margin:22px 0 10px">Ghi đè cấu hình của dự án</div>
     <div class="grid2">
       <label class="f"><span>Registry</span><input type="text" id="f-reg" value="${esc(draft.registry||'')}" placeholder="${esc(inh(p.registry))}"></label>
@@ -1841,6 +2372,7 @@ function envDialog(p, e){
     <label class="f"><span>Lệnh build riêng</span>
       <input type="text" id="f-cmd" value="${esc(draft.buildCommand||'')}" placeholder="${esc(inh(p.buildCommand))}"></label>
     <div class="varhelp" id="varhelp"></div>
+    <div id="paramdefs"></div>
     ${kvBlock('Build args riêng — trùng key thì đè lên của dự án')}
     ${kvBlock('Labels riêng — trùng key thì đè lên của dự án')}
     <label class="check" id="autopush-wrap"><input type="checkbox" id="f-push" ${draft.autoPush?'checked':''}> Mặc định bật push khi build</label>
@@ -1884,7 +2416,10 @@ function envDialog(p, e){
   };
   localChk.onchange = syncLocal; syncLocal();
 
-  mountVarHelp($('#f-cmd', m), $('#varhelp', m));
+  mountVarHelp($('#f-cmd', m), $('#varhelp', m), (p.buildCommand || '').trim());
+  draft.params = draft.params || [];
+  const paramsToSave = mountParamDefs($('#paramdefs', m), $('#f-cmd', m), draft.params,
+    () => $('#f-cmd', m).value.trim() || p.buildCommand || '', p.params || []);
   // Context lives on the project only (Env has no context of its own — see
   // Project.Effective), so the dialog starts there regardless of this env.
   mountFilePick($('#f-envfile', m), $('#pick-envfile', m), () => p.context || '');
@@ -1913,6 +2448,7 @@ function envDialog(p, e){
       extraFlags: $('#f-extra', m).value.trim(),
       buildCommand: $('#f-cmd', m).value.trim(),
       isOnlyLocal: localChk.checked,
+      protected: $('#f-protected', m).checked,
       // Môi trường không push thì cờ "mặc định push" phải tắt hẳn chứ không
       // chỉ ẩn đi: để nó true thì lần bỏ tick sau sẽ bật push trở lại mà
       // người dùng không hề chọn.
@@ -1920,6 +2456,7 @@ function envDialog(p, e){
     });
     draft.buildArgs = draft.buildArgs.filter(r => r.key.trim());
     draft.labels = draft.labels.filter(r => r.key.trim());
+    draft.params = paramsToSave();
     const c = cloneConfig();
     const proj = c.projects.find(x => x.id === p.id);
     proj.envs = (proj.envs || []).map(x => x.id === e.id ? draft : x);
@@ -2111,6 +2648,7 @@ function imagesDialog(){
       <button class="btn primary" id="go" disabled>Thêm</button>
     </div>`, true);
 
+  const group = mountGroupPicker(m, 'group');
   let repos = [];
   const visible = () => repos.filter(r => $('#showAll', m).checked || r.private || r.known);
   const selected = () => $$('#repos input:checked', m).map(c => c.dataset.repo);

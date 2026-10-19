@@ -29,7 +29,9 @@ func TestPromoteStepsWithBuildxStayOnTheRegistry(t *testing.T) {
 		t.Fatalf("có %d bước, muốn 1 bước duy nhất", len(steps))
 	}
 	got := strings.Join(steps[0], " ")
-	want := "buildx imagetools create -t reg/app:prod-1.0.0 reg/app@sha256:abc"
+	// Thiếu --prefer-index=false thì imagetools bọc manifest đơn vào một index
+	// mới: digest đổi, và Harbor từ chối với 415 "Manifest.list is not supported".
+	want := "buildx imagetools create --prefer-index=false -t reg/app:prod-1.0.0 reg/app@sha256:abc"
 	if got != want {
 		t.Errorf("lệnh = %q, muốn %q", got, want)
 	}
@@ -71,7 +73,7 @@ func TestBuildArgvUsesEffectiveEnvironment(t *testing.T) {
 		ExtraFlags: "--pull",
 	}
 
-	argv := buildArgv(p.Effective(e), "reg/app:prod-1.0.0")
+	argv := buildArgv(p.Effective(e), "reg/app:prod-1.0.0", p.Effective(e).Labels)
 	line := strings.Join(argv, " ")
 
 	for _, want := range []string{
@@ -94,14 +96,14 @@ func TestBuildArgvUsesEffectiveEnvironment(t *testing.T) {
 }
 
 func TestBuildArgvDefaultsContextToCurrentDir(t *testing.T) {
-	argv := buildArgv(Env{}, "app:1.0")
+	argv := buildArgv(Env{}, "app:1.0", nil)
 	if argv[len(argv)-1] != "." {
 		t.Errorf("context mặc định = %q, muốn .", argv[len(argv)-1])
 	}
 }
 
 func TestBuildArgvSkipsEmptyOptionalFlags(t *testing.T) {
-	line := strings.Join(buildArgv(Env{Image: "app", Context: "."}, "app:1.0"), " ")
+	line := strings.Join(buildArgv(Env{Image: "app", Context: "."}, "app:1.0", nil), " ")
 	for _, unwanted := range []string{"-f ", "--platform", "--target", "--build-arg", "--label"} {
 		if strings.Contains(line, unwanted) {
 			t.Errorf("không nên có %q khi bỏ trống: %s", unwanted, line)
@@ -136,7 +138,7 @@ func TestStartRunsACustomBuildCommand(t *testing.T) {
 		Envs:         []Env{env},
 	}
 
-	started := s.Start(p, env, "1.2.3", false)
+	started := s.Start(p, env, "1.2.3", false, nil)
 
 	if started.Command != "echo phien-ban-1.2.3 cho Staging" {
 		t.Errorf("lệnh ghi lại = %q, muốn bản đã thay biến", started.Command)
@@ -170,7 +172,7 @@ func TestStartFailsWhenTheCustomCommandProducesNoImage(t *testing.T) {
 		Envs:         []Env{env},
 	}
 
-	started := s.Start(p, env, "1.0.0", true) // có tick push
+	started := s.Start(p, env, "1.0.0", true, nil) // có tick push
 	done := waitForBuild(t, s, started.ID)
 
 	if done.Status != "failed" {
@@ -202,7 +204,7 @@ func TestStartRefusesACommandStillUsingVersionVar(t *testing.T) {
 		Envs:         []Env{env},
 	}
 
-	started := s.Start(p, env, "1.2.2", false)
+	started := s.Start(p, env, "1.2.2", false, nil)
 	done := waitForBuild(t, s, started.ID)
 
 	if done.Status != "failed" {
@@ -221,7 +223,7 @@ func TestStartWithoutCustomCommandStillUsesDockerBuild(t *testing.T) {
 	env := Env{ID: newID(), Name: "Staging"}
 	p := Project{ID: newID(), Name: "web", Image: "web", Context: t.TempDir(), Envs: []Env{env}}
 
-	started := s.Start(p, env, "1.0.0", false)
+	started := s.Start(p, env, "1.0.0", false, nil)
 	waitForBuild(t, s, started.ID)
 
 	if !strings.HasPrefix(started.Command, "docker build -t web:1.0.0") {

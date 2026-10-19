@@ -8,6 +8,7 @@ package main
 
 import (
 	"os/exec"
+	"strings"
 	"syscall"
 )
 
@@ -41,4 +42,10 @@ func killTree(pid int) error {
 // which is what makes pipes, && and quoting behave as they do in a terminal.
 func shellCommand(command string) (string, []string) {
 	return "sh", []string{"-c", command}
+}
+
+// shellQuote makes s one literal argument for sh: single quotes expand
+// nothing, and a quote inside closes, escapes and reopens.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

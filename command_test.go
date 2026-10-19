@@ -13,7 +13,7 @@ func sampleVars() map[string]string {
 		Registry: "harbor.tech", Image: "mm/web",
 		Context: `D:\work\web`, Dockerfile: "",
 	}
-	return buildVarValues(p, target, env, "1.2.3", env.Ref("1.2.3"))
+	return buildVarValues(p, target, env, "1.2.3", env.Ref("1.2.3"), []KV{{Key: "a", Value: "x y"}})
 }
 
 func TestBuildVarValuesCoverEveryDocumentedName(t *testing.T) {
@@ -54,12 +54,12 @@ func TestBuildVarValuesEnvFileCustomAndDefault(t *testing.T) {
 	p := Project{Name: "web"}
 	target := Env{Name: "Production"}
 
-	withCustom := buildVarValues(p, target, Env{Name: "Production", EnvFile: ".env.production"}, "1.2.3", "")
+	withCustom := buildVarValues(p, target, Env{Name: "Production", EnvFile: ".env.production"}, "1.2.3", "", nil)
 	if got := withCustom["envfile"]; got != ".env.production" {
 		t.Errorf("{envfile} = %q, muốn .env.production", got)
 	}
 
-	withDefault := buildVarValues(p, target, Env{Name: "Production"}, "1.2.3", "")
+	withDefault := buildVarValues(p, target, Env{Name: "Production"}, "1.2.3", "", nil)
 	if got := withDefault["envfile"]; got != ".env" {
 		t.Errorf("{envfile} = %q, để trống thì phải mặc định .env", got)
 	}

@@ -223,6 +223,23 @@ func TestStartBuildAllowsPushFalseForLocalOnlyProject(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("status = %d, body = %v, muốn 200 khi không push", code, body)
 	}
+	// Chờ build chạy xong: trên Windows file log còn mở thì thư mục tạm
+	// không xoá được, và test hỏng ở bước dọn dẹp chứ không phải ở điều nó kiểm.
+	waitBuilds(t, store)
+}
+
+// waitBuilds đợi mọi build đang chạy trong store kết thúc.
+func waitBuilds(t *testing.T, s *Store) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for s.HasRunningBuild() {
+		if time.Now().After(deadline) {
+			t.Fatal("build vẫn đang chạy sau 10 giây")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	// finish ghi trạng thái trước khi goroutine đóng file log.
+	time.Sleep(100 * time.Millisecond)
 }
 
 // ---------- Start (defense in depth) ----------
@@ -242,7 +259,7 @@ func TestStartNeverPushesForALocalOnlyProject(t *testing.T) {
 		Envs: []Env{env},
 	}
 
-	started := s.Start(p, env, "1.0.0", true)
+	started := s.Start(p, env, "1.0.0", true, nil)
 
 	deadline := time.Now().Add(10 * time.Second)
 	var done Build

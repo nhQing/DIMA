@@ -115,11 +115,13 @@ Mỗi môi trường có một **tiền tố tag**. Version `1.2.3` với tiền
 **Hai cách đưa version qua các môi trường**, khai ở từng dự án:
 
 - `rebuild` — mỗi môi trường build lại từ mã nguồn với build args của nó. Hợp với ứng dụng nhúng biến lúc build.
-- `promote` — build một lần ở môi trường nguồn, rồi gắn thêm tag cho chính image đó ở các môi trường khác. Digest giữ nguyên, nên bản lên production đúng là bản đã test. Ở chế độ này chỉ môi trường nguồn có nút Build; các môi trường khác chỉ nhận promote.
+- `promote` — build ở môi trường nguồn, rồi gắn thêm tag cho chính image đó ở các môi trường khác. Digest giữ nguyên, nên bản lên production đúng là bản đã test. Môi trường nào cũng vẫn **build riêng được** khi cần (bản vá chỉ cho production, build args khác nhau…): hộp thoại Build nhắc rằng bản đó sẽ là image mới, khác digest với bản đã test, và nếu version đó đã có bản đẩy lên ở môi trường khác thì có sẵn nút "Promote bản đó thay vì build".
 
-**Promote và rollback** — cùng một cơ chế. Promote một version cũ lên môi trường đang hỏng chính là rollback. Có `docker buildx` thì tag được gắn thẳng trên registry (không truyền dữ liệu, giữ được manifest đa kiến trúc); không có thì lùi về `pull` → `tag` → `push`.
+**Promote và rollback** — cùng một cơ chế. Promote một version cũ lên môi trường đang hỏng chính là rollback. Có `docker buildx` 0.12+ thì tag được gắn thẳng trên registry bằng `imagetools create --prefer-index=false` (không truyền dữ liệu, giữ nguyên manifest — đơn hay đa kiến trúc — nên digest không đổi); không có thì lùi về `pull` → `tag` → `push`. Cờ `--prefer-index=false` là bắt buộc: thiếu nó, imagetools bọc manifest đơn vào một index mới, digest đổi và Harbor không nhận manifest list sẽ trả về `415 Manifest.list is not supported`.
 
-**Build nhanh** — hộp thoại hỏi version, gợi ý sẵn bản patch/minor kế tiếp dựa trên version mới nhất **của dự án**, kèm một gợi ý theo dấu thời gian. Có xem trước ref sẽ tạo ra. Tick chọn để push luôn sau khi build.
+**Build nhanh** — hộp thoại chia đôi: bên trái là version và các tham số, bên phải là **câu lệnh sẽ chạy thật**, cập nhật theo từng phím gõ (kèm bước `docker push` nếu tick push). Câu lệnh đó do chính hàm mà lúc build dùng sinh ra, nên xem trước và chạy thật không thể lệch nhau. Nút Build bị khoá khi còn tham số bắt buộc trống.
+
+Version được gợi ý **theo từng môi trường**: ô version điền sẵn version lần trước của chính môi trường đó, các gợi ý patch/minor tính từ số đó, kèm "bản mới nhất của dự án" nếu môi trường này chưa có và một gợi ý theo dấu thời gian.
 
 **Lệnh build riêng** — thư mục nào có sẵn script build thì khai lệnh của nó vào ô "Lệnh build riêng", DIMA chạy lệnh đó thay cho `docker build`. Để trống thì mọi thứ như cũ. Môi trường ghi đè được lệnh của dự án, như mọi trường khác.
 
@@ -127,25 +129,66 @@ Lệnh nhận các biến trong ngoặc nhọn:
 
 | Biến | Là gì |
 |---|---|
-| `{version}` | version của dự án, ví dụ `1.2.3` |
-| `{tag}` | tag thật trên registry, gồm cả tiền tố của môi trường |
+| `{tag}` | tag thật trên registry, gồm cả tiền tố của môi trường, ví dụ `prod-1.2.3` |
 | `{ref}` | tên image đầy đủ kèm tag |
 | `{repo}` · `{registry}` · `{image}` | các phần của tên image |
 | `{env}` · `{project}` | tên môi trường, tên dự án |
 | `{context}` · `{dockerfile}` | thư mục mã nguồn, tên Dockerfile |
 | `{envfile}` | đường dẫn file `.env` đã khai ở môi trường (ô "File .env"); để trống thì mặc định `.env` |
+| `{labels}` | các cờ `--label` (label tự gắn + labels đã khai), mỗi cái đã đặt trong nháy |
 
-Ví dụ: `./build.ps1 -Version {version} -Ref {ref}`. Gõ sai tên biến thì nó được giữ nguyên trong lệnh chứ không âm thầm thành rỗng — sai sót phải nhìn thấy được.
+Ví dụ: `./build.ps1 -Tag {tag} -Ref {ref}`. Không có biến `{version}`: nó không kèm tiền tố tag, nên lệnh dùng nó sẽ gắn tag khác với tag DIMA đi tìm lúc push — DIMA từ chối chạy lệnh còn biến này.
+
+**Tham số của riêng bạn** — mọi `{tên}` khác trong lệnh là một tham số, hộp thoại Build hỏi nó trong một bảng. Ví dụ `./build.ps1 -Ref {ref} {cache} -Mode {mode}` cho ra hai dòng `{cache}` và `{mode}`. Bảng "Tham số của lệnh" ngay dưới ô lệnh (trong Cài đặt dự án) nói cách hỏi:
+
+| Kiểu | Hộp thoại Build hiện | Thay vào lệnh |
+|---|---|---|
+| Ô chữ | ô gõ | chữ đã gõ |
+| Chọn từ danh sách | dropdown các lựa chọn `a, b, c` | lựa chọn đã chọn |
+| Ô tick | checkbox | tick thì chèn chữ khai ở cột "Lựa chọn" (ví dụ `-NoCache`), không tick thì không chèn gì |
+
+Mỗi tham số có thêm giá trị mặc định, cờ **bắt buộc** (còn trống thì không cho build) và ghi chú hiện cạnh ô. Tham số không khai dòng nào vẫn được hỏi, như một ô chữ không bắt buộc. Tham số để trống thì mất luôn dấu cách đứng ngay trước nó, nên lệnh không còn khoảng trắng đôi. Môi trường khai riêng được từng dòng (cột "Riêng"), thay cho dòng của dự án.
+
+Giá trị lần build trước được nhớ **theo từng môi trường** và điền sẵn cho lần sau; chưa build bao giờ thì lấy giá trị mặc định.
+
+Gõ sai tên biến thì nó trở thành một tham số chưa khai, và hiện ngay trong bảng — sai sót phải nhìn thấy được.
 
 Lệnh chạy qua shell của hệ điều hành, tại thư mục mã nguồn: PowerShell trên Windows (vì `cmd` không chạy được `.ps1` và không hiểu `./`), `sh` trên macOS/Linux. Nhờ đó `&&`, ống dẫn và dấu nháy hành xử đúng như khi bạn gõ trong terminal.
 
 **Lệnh của bạn cần gắn tag image thành `{ref}`.** Push, digest, promote và bảng version đều dựa vào cái tên đó. Chạy xong mà DIMA không thấy image ấy trên máy, nó ghi một dòng nhắc vào log chứ không coi là build hỏng — script của bạn có thể đã tự push rồi. Khi dùng lệnh riêng, DIMA cũng không đòi phải có Dockerfile trong thư mục nữa.
+
+**Label tự gắn** — mọi image DIMA build đều mang sẵn thông tin của nó, nên mở image trong Docker Desktop, `docker inspect` hay Harbor là thấy ngay, không cần tra lịch sử DIMA:
+
+| Label | Giá trị |
+|---|---|
+| `org.opencontainers.image.version` | version, ví dụ `1.2.0` |
+| `org.opencontainers.image.revision` | commit lúc build; thêm `-dirty` nếu thư mục còn sửa dở |
+| `org.opencontainers.image.title` | tên dự án |
+| `dima.build-env` | môi trường **lúc build** — promote giữ nguyên image, nên image trên production có thể ghi Staging, và điều đó đúng |
+| `dima.branch` | nhánh git lúc build |
+
+Không có label thời gian: nó làm hai lần build cùng mã nguồn ra hai image khác nhau, mà docker đã tự ghi giờ tạo rồi. Label khai trong cài đặt trùng key thì thắng label tự gắn. Lệnh build riêng nhận các label này qua biến `{labels}` (đã đặt sẵn trong nháy cho shell), ví dụ `docker build {labels} -t {ref} .`.
+
+**Container đang chạy** — DIMA đọc `docker ps -a` của máy này và ghép từng container vào bản build nó đang chạy: ô môi trường ghi "▶ N container đang chạy", bảng version có huy hiệu "▶ đang chạy", trang dự án và trang môi trường có danh sách container (tên, trạng thái, cổng). Container được ghép theo tên image lúc chạy (`repo:tag`) hoặc theo digest (`repo@sha256:…`). Khi một lần build sau đã kéo tag sang image khác, docker chỉ còn báo container bằng ID image — DIMA để nó là "không rõ version" chứ không đoán. Danh sách được làm mới mỗi 10 giây; đây chỉ là container trên chính máy đang mở DIMA, không phải trên server.
+
+**Môi trường quan trọng** — tick "Môi trường quan trọng (production)" trong Cài đặt môi trường. Image nên tới đó bằng promote, sau khi đã chạy ở môi trường khác; build thẳng ở đó vẫn làm được nhưng hộp thoại Build bắt tick "Tôi hiểu, vẫn build thẳng lên …" và **máy chủ cũng từ chối** nếu thiếu xác nhận, nên một tab cũ hay một script gọi API không lách được. Promote vào môi trường quan trọng thì không cần xác nhận: bản đó đã chạy ở môi trường nguồn.
+
+**Dọn image cũ** — nút ở trang dự án. Xoá image cũ của dự án **trên máy này** (`docker rmi`, không ép), giữ N bản mới nhất mỗi môi trường. Luôn giữ bản hiện tại của mỗi môi trường, image có container dùng, và tag không phải phiên bản (`latest`, `cache`…). Danh sách được tính lại ngay lúc bấm xoá, nên container vừa chạy sau khi mở hộp thoại tự giữ image của nó lại. Registry không bao giờ bị đụng tới: xoá tag trên đó có thể làm sập một server đang pull nó.
+
+**Đọc từ registry** — nút ở trang dự án. DIMA đọc các tag đang có trên registry, xếp vào môi trường theo tiền tố tag (tiền tố dài nhất thắng, nên `prod-v1.2` về môi trường `prod-v` chứ không về môi trường không tiền tố), và cho ghi những tag chưa có vào lịch sử với nhãn **từ registry**. Digest lấy từ chính registry, nên các bản đó promote được ngay — kể cả bản do CI, máy khác hay người khác đẩy lên.
+
+- Thông tin đăng nhập là cái `docker login` đã lưu (`credsStore`, `credHelpers` hoặc mục `auths` trong `~/.docker/config.json`), DIMA không hỏi mật khẩu.
+- Thử lần lượt API của Harbor 2.x, Harbor 1.x, rồi API chuẩn `/v2/<repo>/tags/list` của mọi registry. Harbor cho cả giờ push; registry khác chỉ cho tag, digest lấy bằng một lệnh HEAD mỗi tag (tối đa 200 tag mới nhất).
+- Tag nào lịch sử DIMA ghi một digest mà registry đang giữ digest khác được tô **khác lịch sử**: tag đó đã bị đẩy đè từ nơi khác, và bản đang chạy có thể không phải bản bạn nghĩ.
+- Tag không khớp tiền tố môi trường nào được liệt kê riêng, không bị đoán bừa vào đâu.
 
 **Nhánh git của từng bản** — mỗi lần build, DIMA đọc thư mục mã nguồn và ghi lại nhánh, commit rút gọn, và việc lúc đó có thay đổi chưa commit hay không. Lịch sử hiện thẳng tên nhánh bên cạnh version, nên không còn phải đoán bản nào thuộc nhánh nào.
 
 Bản build khi thư mục còn sửa dở được tô cam kèm dấu `*`: image đó **không khớp với commit nào**, sau này không dựng lại được từ repo. Đây là thứ dễ bỏ sót nhất và cũng khó truy nhất về sau.
 
 Quan trọng hơn việc ghi lại: hộp thoại Build **hiện nhánh đang đứng trước khi bạn bấm**, và tô cảnh báo nếu nhánh đó khác với lần build trước của chính môi trường này. Ghi lại chỉ giúp truy ngược sau khi đã lỡ; hiện trước mới ngăn được việc build nhầm.
+
+**Thay đổi so với bản trước** — mở chi tiết một bản build, bấm "Xem các commit": DIMA chạy `git log` từ commit của bản thành công trước đó **trong cùng môi trường** tới commit của bản này, nên thấy ngay version mới mang theo những gì (tối đa 100 commit). Bản promote cùng commit với bản trước thì ghi "cùng mã nguồn". Commit không có trong thư mục (build ở máy khác, nhánh đã xoá) thì DIMA nói ra, chứ không coi là "không có thay đổi" — `git fetch` rồi thử lại.
 
 Bản promote thừa hưởng nhánh và commit của bản gốc, vì nó ship đúng image đó chứ không build lại. Thư mục không phải git repo, hoặc máy không có `git`, thì phần này im lặng bỏ qua — nó là thông tin thêm, không bao giờ là lý do chặn build.
 
@@ -182,7 +225,7 @@ Lần đầu mở bản 0.2.0, `config.json` cũ được chuyển sang cấu tr
 Toàn bộ mã nằm ngay ở thư mục gốc, một dự án Go duy nhất. Cần Go 1.22 trở lên. Không có dependency ngoài stdlib, nên không cần mạng khi build.
 
 ```bash
-go test ./...              # 40 test
+go test ./...              # 159 test
 go build -o dima .         # build cho máy hiện tại
 ./build.sh                 # build cả 6 nền tảng vào ./dist
 ```
@@ -200,10 +243,13 @@ go build -o dima .         # build cho máy hiện tại
 | `store.go` | mô hình dữ liệu, quy tắc kế thừa, đọc/ghi JSON, migration |
 | `builder.go` | chạy `docker build` / `push` / `promote`, đọc `docker images`, gom log, hủy |
 | `images.go` | gom image theo repository, tách registry, nhận diện tag phiên bản |
-| `git.go` | đọc nhánh, commit và trạng thái sạch/bẩn của thư mục mã nguồn |
-| `command.go` | danh sách biến và việc thay biến cho lệnh build riêng |
+| `registry.go`, `api_registry.go` | đọc tag trên registry (Harbor 2.x/1.x, API chuẩn), lấy credential của `docker login`, ghép tag vào môi trường |
+| `containers.go` | đọc `docker ps`, ghép container vào bản build nó đang chạy |
+| `cleanup.go`, `api_cleanup.go` | kế hoạch dọn image cũ trên máy và lệnh `docker rmi` |
+| `git.go` | đọc nhánh, commit, trạng thái sạch/bẩn, và danh sách commit giữa hai bản |
+| `command.go` | danh sách biến, tham số tự khai và việc thay biến cho lệnh build riêng |
 | `api.go` | các endpoint HTTP |
-| `store_test.go`, `builder_test.go`, `images_test.go`, `git_test.go` | test cho kế thừa, migration, lệnh promote, phân loại image và đọc git |
+| `*_test.go` | test cho kế thừa, migration, lệnh promote, tham số lệnh build, label, đọc registry (Harbor giả lập), container, dọn image, đọc git |
 | `ui/index.html` | toàn bộ giao diện, không framework |
 | `picker_windows.go` | hộp thoại chọn thư mục của Windows, mở qua powershell (xem ghi chú ở Hạn chế) |
 | `picker_other.go` | bản dùng osascript trên macOS, zenity/kdialog trên Linux |
@@ -225,7 +271,7 @@ Thông tin đăng nhập registry không nằm trong ứng dụng. Đăng nhập
 
 - Build chạy trên chính máy đang mở ứng dụng, không phải CI. Máy tắt là không build được.
 - Chưa có phân quyền hay nhật ký kiểm toán. Nếu cần chứng minh ai đưa bản nào lên production, dùng CI đúng nghĩa.
-- Chưa đọc trực tiếp registry, nên danh sách version là những bản DIMA đã build hoặc promote, không phải mọi tag có trên registry. Các cảnh báo trùng version cũng chỉ dựa trên lịch sử cục bộ.
+- Registry chỉ được đọc khi bạn bấm "Đọc từ registry", không tự đồng bộ nền. Giữa hai lần đọc, các cảnh báo trùng version chỉ dựa trên lịch sử cục bộ.
 - Mỗi lần chỉ nên chạy một build cho một môi trường; ứng dụng không chặn việc chạy song song.
 - Ở chế độ `promote`, hai môi trường phải có tiền tố tag khác nhau. Trùng tiền tố thì tag đích trùng tag nguồn và ứng dụng sẽ từ chối, vì thao tác đó không có tác dụng gì.
 - File `.exe` chưa có icon nhúng bên trong; icon hiện qua shortcut và qua cửa sổ ứng dụng. Muốn nhúng thẳng vào exe thì cần thêm công cụ sinh resource, và sẽ mất tính chất "chỉ stdlib".

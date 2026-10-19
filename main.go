@@ -9,10 +9,12 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -189,18 +191,56 @@ func show(url, profile string, asTab bool, store *Store) {
 
 // guard blocks requests whose Host header is not loopback, which stops a
 // malicious page from reaching this server through DNS rebinding.
+//
+// It also blocks cross-site writes. The Host check alone does not: any page
+// open in any browser on this machine can fetch http://127.0.0.1:7788 with
+// mode "no-cors" — Host is then loopback, the body is read as JSON whatever
+// its declared type, and this server runs commands. A page cannot send
+// Content-Type application/json cross-origin without a CORS preflight, which
+// this server never answers, so requiring it on every write closes that, and
+// a browser's own Origin / Sec-Fetch-Site headers are checked on top.
 func guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
 			host = r.Host
 		}
-		if host != "127.0.0.1" && host != "localhost" && host != "::1" {
+		if !isLoopbackName(host) {
 			http.Error(w, "chỉ truy cập được qua localhost", http.StatusForbidden)
+			return
+		}
+		if msg := crossSiteWrite(r); msg != "" {
+			http.Error(w, msg, http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isLoopbackName(host string) bool {
+	return host == "127.0.0.1" || host == "localhost" || host == "::1"
+}
+
+// crossSiteWrite says why a request that changes something did not come
+// from DIMA's own page, or "".
+func crossSiteWrite(r *http.Request) string {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+		return ""
+	}
+	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+		return "chỉ nhận request JSON từ giao diện của DIMA"
+	}
+	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {
+		return "từ chối request từ trang web khác"
+	}
+	if origin := r.Header.Get("Origin"); origin != "" {
+		u, err := url.Parse(origin)
+		if err != nil || !isLoopbackName(u.Hostname()) {
+			return "từ chối request từ trang web khác"
+		}
+	}
+	return ""
 }
 
 // openAppWindow opens the UI as its own window using a Chromium browser's

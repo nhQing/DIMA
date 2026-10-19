@@ -124,8 +124,40 @@ func (s *Store) clearCancel(id string) {
 	s.mu.Unlock()
 }
 
-// buildArgv assembles the docker command line for an environment.
-func buildArgv(env Env, ref string) []string {
+// autoLabels are the labels DIMA puts on every image it builds, so the image
+// itself says what it is — in Docker Desktop's image view, in `docker
+// inspect`, in Harbor — without anyone having to find DIMA's history.
+//
+// The OCI names come first because every tool understands them. The
+// environment is the one the image was BUILT in, and is named that way on
+// purpose: a promote ships these exact bytes to production, so an image on
+// production may honestly say it was built for staging. Nothing time-based
+// is added: a "created" label would make two builds of identical source
+// produce different images, and docker records the time already.
+func autoLabels(p Project, target Env, version string, git GitInfo) []KV {
+	out := []KV{
+		{Key: "org.opencontainers.image.version", Value: version},
+		{Key: "org.opencontainers.image.title", Value: p.Name},
+		{Key: "dima.build-env", Value: target.Name},
+	}
+	if git.IsRepo && git.Commit != "" {
+		rev := git.Commit
+		if git.Dirty {
+			// Matches no commit: say so in the one place that travels with it.
+			rev += "-dirty"
+		}
+		out = append(out, KV{Key: "org.opencontainers.image.revision", Value: rev})
+	}
+	if git.IsRepo && git.Branch != "" && git.Branch != DetachedBranch {
+		out = append(out, KV{Key: "dima.branch", Value: git.Branch})
+	}
+	return out
+}
+
+// buildArgv assembles the docker command line for an environment. labels
+// are every label the image gets: mergeKV(autoLabels, env.Labels), so a
+// label the user declares under the same key wins.
+func buildArgv(env Env, ref string, labels []KV) []string {
 	args := []string{"build", "-t", ref}
 	if f := strings.TrimSpace(env.Dockerfile); f != "" {
 		args = append(args, "-f", f)
@@ -136,7 +168,7 @@ func buildArgv(env Env, ref string) []string {
 		}
 		args = append(args, "--build-arg", kv.Key+"="+kv.Value)
 	}
-	for _, kv := range env.Labels {
+	for _, kv := range labels {
 		if strings.TrimSpace(kv.Key) == "" {
 			continue
 		}
@@ -158,25 +190,79 @@ func buildArgv(env Env, ref string) []string {
 	return append(args, ctx)
 }
 
-// Start kicks off a build (and an optional push) in the background and
-// returns the new build record immediately. It always works with the
-// environment resolved against its project.
-func (s *Store) Start(p Project, target Env, version string, push bool) Build {
+// buildPlan is everything a build will run, worked out without running any
+// of it. The build dialog previews exactly this and Start executes exactly
+// this, so what the person reads before pressing Build is the command that
+// runs — not a second rendering of it that could drift.
+type buildPlan struct {
+	Env     Env // resolved against the project
+	Ref     string
+	Custom  string // the custom command as configured, "" for docker build
+	Command string // as shown, and for a custom command as run
+	Bin     string
+	Argv    []string
+	Fields  []ParamField
+	// Problems are the required parameters left empty, or holding a value
+	// their dropdown does not offer. A plan with problems must not run.
+	Problems []string
+}
+
+// remembered is what the environment keeps for the next build dialog: the
+// state of each box, not what it expanded to.
+func (b buildPlan) remembered() map[string]string {
+	out := map[string]string{}
+	for _, f := range b.Fields {
+		out[f.Name] = f.Value
+	}
+	return out
+}
+
+func planBuild(docker string, p Project, target Env, version string, given map[string]string, git GitInfo) buildPlan {
 	env := p.Effective(target)
 	ref := env.Ref(version)
-	docker := s.Config().DockerBin
-	git := ReadGit(env.Context)
+	plan := buildPlan{Env: env, Ref: ref, Fields: []ParamField{}, Problems: []string{}}
+	labels := mergeKV(autoLabels(p, target, version, git), env.Labels)
 
 	// A folder whose build is driven by a script replaces docker build
 	// entirely; everything after the build — push, digest, version history,
 	// promote — carries on unchanged.
-	custom := strings.TrimSpace(env.BuildCommand)
-	bin, argv := docker, buildArgv(env, ref)
-	shown := docker + " " + strings.Join(argv, " ")
-	if custom != "" {
-		shown = expandVars(custom, buildVarValues(p, target, env, version, ref))
-		bin, argv = shellCommand(shown)
+	plan.Custom = strings.TrimSpace(env.BuildCommand)
+	if plan.Custom == "" {
+		plan.Bin, plan.Argv = docker, buildArgv(env, ref, labels)
+		plan.Command = docker + " " + strings.Join(plan.Argv, " ")
+		return plan
 	}
+
+	plan.Fields = paramFields(env, given)
+	params, problems := paramValues(plan.Fields)
+	plan.Problems = problems
+	values := buildVarValues(p, target, env, version, ref, labels)
+	// commandParams never returns a built-in name, so nothing here can
+	// overwrite a value DIMA supplies.
+	template := plan.Custom
+	for k, v := range params {
+		values[k] = v
+		// An empty parameter takes the space before it along, so an unticked
+		// {cache} in "-Ref {ref} {cache} -Mode" does not leave a double gap.
+		// Only that one space: anything else around it is the command's own.
+		if v == "" {
+			template = strings.ReplaceAll(template, " {"+k+"}", "")
+		}
+	}
+	plan.Command = expandVars(template, values)
+	plan.Bin, plan.Argv = shellCommand(plan.Command)
+	return plan
+}
+
+// Start kicks off a build (and an optional push) in the background and
+// returns the new build record immediately. It always works with the
+// environment resolved against its project.
+func (s *Store) Start(p Project, target Env, version string, push bool, given map[string]string) Build {
+	docker := s.Config().DockerBin
+	git := ReadGit(p.Effective(target).Context)
+	plan := planBuild(docker, p, target, version, given, git)
+	env, ref, custom := plan.Env, plan.Ref, plan.Custom
+	bin, argv, shown := plan.Bin, plan.Argv, plan.Command
 
 	// A local-only environment never has anywhere to push to. Start is the
 	// one place that actually runs `docker push`, so this is enforced here
@@ -207,7 +293,11 @@ func (s *Store) Start(p Project, target Env, version string, push bool) Build {
 		StartedAt:   time.Now(),
 	}
 	s.addBuild(b)
-	s.rememberVersion(target.ID, version)
+	var remember map[string]string
+	if custom != "" {
+		remember = plan.remembered()
+	}
+	s.rememberBuild(target.ID, version, remember)
 
 	lb := s.logFor(b.ID)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -223,6 +313,14 @@ func (s *Store) Start(p Project, target Env, version string, push bool) Build {
 		// DIMA never looks at. The HTTP layer already refuses this, but Start
 		// is where the command actually runs, so it refuses here too.
 		if msg := CheckBuildCommand(custom); msg != "" {
+			lb.writeString("$ " + b.Command + "\n\nLỗi: " + msg + "\n")
+			s.finish(b.ID, "failed", msg)
+			return
+		}
+		// Same reasoning for a required parameter left empty: the script
+		// would run with a hole where an argument should be.
+		if len(plan.Problems) > 0 {
+			msg := "chưa điền tham số bắt buộc: " + strings.Join(plan.Problems, ", ")
 			lb.writeString("$ " + b.Command + "\n\nLỗi: " + msg + "\n")
 			s.finish(b.ID, "failed", msg)
 			return
@@ -474,9 +572,15 @@ func repoOf(ref string) string {
 // untouched and a multi-arch manifest survives. Without buildx the image
 // has to come down to this machine and go back up, which is slower and
 // flattens a multi-arch manifest to the local platform.
+//
+// --prefer-index=false is what keeps the digest untouched. Given a single
+// source, imagetools by default wraps a plain image manifest in a brand-new
+// index — a different digest, and a manifest list that registries like an
+// older Harbor refuse outright (415 "Manifest.list is not supported"). With
+// the flag it copies the source manifest as-is, index or not.
 func promoteSteps(buildx bool, srcRef, dstRef string) [][]string {
 	if buildx {
-		return [][]string{{"buildx", "imagetools", "create", "-t", dstRef, srcRef}}
+		return [][]string{{"buildx", "imagetools", "create", "--prefer-index=false", "-t", dstRef, srcRef}}
 	}
 	return [][]string{
 		{"pull", srcRef},
@@ -487,13 +591,18 @@ func promoteSteps(buildx bool, srcRef, dstRef string) [][]string {
 
 // buildxAvailable is checked once per run: the answer cannot change while
 // the app is open.
+//
+// It asks for --prefer-index (buildx 0.12+), not just for buildx: an older
+// buildx cannot carbon-copy a single manifest, and the index it would make
+// instead changes the digest. pull → tag → push keeps it, so that wins.
 func (s *Store) buildxAvailable() bool {
 	s.buildxOnce.Do(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, s.Config().DockerBin, "buildx", "version")
+		cmd := exec.CommandContext(ctx, s.Config().DockerBin, "buildx", "imagetools", "create", "--help")
 		hideWindow(cmd)
-		s.buildxOK = cmd.Run() == nil
+		out, err := cmd.CombinedOutput()
+		s.buildxOK = err == nil && strings.Contains(string(out), "--prefer-index")
 	})
 	return s.buildxOK
 }
@@ -551,7 +660,7 @@ func (s *Store) Promote(p Project, target Env, src Build, version string) Build 
 
 		lb.writeString("Đưa " + srcRef + "\n      sang " + ref + "\n\n")
 		if !s.buildxAvailable() {
-			lb.writeString("(không có docker buildx — phải kéo image về máy rồi đẩy lên lại)\n\n")
+			lb.writeString("(không có docker buildx 0.12+ — phải kéo image về máy rồi đẩy lên lại)\n\n")
 		}
 		for i, st := range steps {
 			lb.writeString("$ " + lines[i] + "\n\n")

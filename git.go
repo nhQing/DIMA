@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -34,6 +36,51 @@ func gitIn(dir string, args ...string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(string(out)), true
+}
+
+// Commit is one line of a change list.
+type Commit struct {
+	Hash    string `json:"hash"`
+	Author  string `json:"author"`
+	Date    string `json:"date"`
+	Subject string `json:"subject"`
+}
+
+// maxChanges keeps a change list readable; a gap wider than this between two
+// releases is better read in a real git client.
+const maxChanges = 100
+
+// CommitsBetween lists the commits reachable from to but not from from —
+// what a release at `to` contains that the one at `from` did not. An empty
+// from lists the newest commits up to `to`.
+//
+// The commits have to exist in this clone. A build made on another machine,
+// or from a branch since deleted, may name a commit this folder has never
+// seen, and that is reported rather than shown as "no changes".
+func CommitsBetween(dir, from, to string) ([]Commit, error) {
+	if _, ok := gitIn(dir, "cat-file", "-e", to+"^{commit}"); !ok {
+		return nil, fmt.Errorf("thư mục mã nguồn không có commit %s — có thể bản này build ở máy khác, hoặc nhánh đã bị xoá; chạy git fetch rồi thử lại", to)
+	}
+	rng := to
+	if from != "" {
+		if _, ok := gitIn(dir, "cat-file", "-e", from+"^{commit}"); !ok {
+			return nil, fmt.Errorf("thư mục mã nguồn không có commit %s của bản trước — chạy git fetch rồi thử lại", from)
+		}
+		rng = from + ".." + to
+	}
+	out, ok := gitIn(dir, "log", "--no-decorate", "--date=short",
+		"--format=%h%x09%an%x09%ad%x09%s", "-n", strconv.Itoa(maxChanges), rng)
+	if !ok {
+		return nil, fmt.Errorf("git log lỗi trong %s", dir)
+	}
+	list := []Commit{}
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.SplitN(line, "\t", 4)
+		if len(f) == 4 {
+			list = append(list, Commit{Hash: f[0], Author: f[1], Date: f[2], Subject: f[3]})
+		}
+	}
+	return list, nil
 }
 
 // ReadGit inspects a build context folder.

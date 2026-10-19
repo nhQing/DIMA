@@ -144,30 +144,32 @@ func TestRefAndRepo(t *testing.T) {
 	}
 }
 
-func TestCanBuildRebuildModeAllowsEveryEnv(t *testing.T) {
+func TestRebuildModeNeverBuildsOutsideSource(t *testing.T) {
 	p := Project{ReleaseMode: ModeRebuild, Envs: []Env{{ID: "a"}, {ID: "b"}}}
-	if !p.CanBuild("a") || !p.CanBuild("b") {
-		t.Error("chế độ rebuild phải cho build ở mọi môi trường")
+	if p.BuildsOutsideSource("a") || p.BuildsOutsideSource("b") {
+		t.Error("chế độ rebuild không có chuỗi promote nên không môi trường nào là build ngoài nguồn")
 	}
 }
 
-func TestCanBuildPromoteModeAllowsOnlySourceEnv(t *testing.T) {
+// Mọi môi trường của dự án promote đều build được; chỉ build ở môi trường
+// không phải nguồn mới bị coi là đi ngoài chuỗi promote, để hộp thoại cảnh báo.
+func TestPromoteModeFlagsBuildsOutsideSource(t *testing.T) {
 	p := Project{ReleaseMode: ModePromote, SourceEnvID: "a", Envs: []Env{{ID: "a"}, {ID: "b"}}}
-	if !p.CanBuild("a") {
-		t.Error("env nguồn phải build được")
+	if p.BuildsOutsideSource("a") {
+		t.Error("build ở môi trường nguồn là đúng chuỗi promote")
 	}
-	if p.CanBuild("b") {
-		t.Error("env đích chỉ được nhận promote, không được build")
+	if !p.BuildsOutsideSource("b") {
+		t.Error("build ở môi trường đích phải được đánh dấu là đi ngoài chuỗi promote")
 	}
 }
 
-func TestCanBuildPromoteFallsBackToFirstEnv(t *testing.T) {
+func TestPromoteSourceFallsBackToFirstEnv(t *testing.T) {
 	p := Project{ReleaseMode: ModePromote, SourceEnvID: "không-tồn-tại", Envs: []Env{{ID: "a"}, {ID: "b"}}}
-	if !p.CanBuild("a") {
-		t.Error("nguồn trỏ sai phải lùi về env đầu tiên")
+	if p.BuildEnvID() != "a" {
+		t.Errorf("nguồn trỏ sai phải lùi về env đầu tiên, đang là %q", p.BuildEnvID())
 	}
-	if p.CanBuild("b") {
-		t.Error("env thứ hai vẫn không được build")
+	if !p.BuildsOutsideSource("b") {
+		t.Error("env thứ hai vẫn nằm ngoài nguồn")
 	}
 }
 

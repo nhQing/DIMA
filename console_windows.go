@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -64,6 +65,21 @@ func hideWindow(cmd *exec.Cmd) {
 // behave the way the person expects from their terminal.
 func shellCommand(command string) (string, []string) {
 	return "powershell.exe", []string{"-NoProfile", "-Command", command}
+}
+
+// shellQuote makes s one literal argument for shellCommand's shell. A
+// PowerShell single-quoted string expands nothing; a quote inside is doubled.
+//
+// PowerShell takes the typographic quotes ‘ ’ ‚ ‛ as single quotes too, so
+// each of them has to be doubled as well — otherwise a branch named x’;calc;’
+// closes the string and runs calc. A label value is not something the person
+// typed into the command: it comes from the branch, the folder name, the
+// environment name.
+var psQuoteEscaper = strings.NewReplacer("'", "''", "‘", "‘‘", "’", "’’",
+	"‚", "‚‚", "‛", "‛‛")
+
+func shellQuote(s string) string {
+	return "'" + psQuoteEscaper.Replace(s) + "'"
 }
 
 // killTree ends a child process and everything that child started.
