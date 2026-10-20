@@ -117,7 +117,7 @@ header{
    sẵn có ink < panel < raised < line vừa đủ hai bậc cần thiết. */
 .grp{
   display:flex; align-items:center; gap:7px; width:100%; text-align:left;
-  padding:7px 14px; color:var(--dim); font-size:11.5px;
+  padding:7px 14px; color:var(--dim); font-size:12px;
   letter-spacing:.06em; text-transform:uppercase; margin-top:8px;
   background:var(--raised);
 }
@@ -172,7 +172,7 @@ header{
    drift apart. */
 .latest-note{
   display:flex; align-items:center; gap:6px; min-width:0; margin-top:3px;
-  font-size:11.5px; color:var(--dim);
+  font-size:12px; color:var(--dim);
 }
 .latest-note .dot{width:6px; height:6px; flex:0 0 6px}
 .latest-note > span{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
@@ -190,7 +190,25 @@ main{flex:1; min-width:0; overflow-y:auto}
 .pane-head{display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap}
 h1{font-size:23px; font-weight:620; margin:0 0 4px; letter-spacing:-.01em}
 .ref{font-family:var(--mono); font-size:13px; color:var(--muted); word-break:break-all}
+/* A sentence under a title, as opposed to .ref, which is an image name. */
+.lede{font-size:13.5px; color:var(--muted)}
 .actions{margin-left:auto; display:flex; gap:8px; flex-shrink:0; flex-wrap:wrap}
+/* The title column gives way, so a warning under the title wraps inside it
+   instead of pushing the buttons onto a row of their own. */
+.pane-head > div:first-child{flex:1 1 320px; min-width:0}
+
+.menuwrap{position:relative}
+.menu{
+  position:absolute; right:0; top:calc(100% + 6px); z-index:30; width:300px;
+  background:var(--raised); border:1px solid var(--line); border-radius:8px;
+  padding:5px; box-shadow:0 10px 30px rgba(0,0,0,.45);
+}
+.menu[hidden]{display:none}
+.menu [role=menuitem]{
+  display:block; width:100%; text-align:left; padding:8px 10px; border-radius:6px;
+}
+.menu [role=menuitem]:hover, .menu [role=menuitem]:focus-visible{background:var(--line); outline:none}
+.menu [role=menuitem] span{display:block; font-size:12px; color:var(--muted); margin-top:1px}
 
 .btn{padding:7px 14px; border-radius:6px; background:var(--raised); border:1px solid var(--line)}
 .btn:hover{border-color:var(--dim)}
@@ -226,10 +244,10 @@ h1{font-size:23px; font-weight:620; margin:0 0 4px; letter-spacing:-.01em}
 .tile-env{font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:7px}
 .tile-ver{font-family:var(--mono); font-size:18px; margin:3px 0 2px; letter-spacing:-.01em}
 .tile-ver.none{font-size:13px; color:var(--dim); font-family:var(--sans)}
-.tile-meta{font-family:var(--mono); font-size:11.5px; color:var(--dim);
+.tile-meta{font-family:var(--mono); font-size:12px; color:var(--dim);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.tile-warn{color:var(--live); font-size:11.5px; margin-top:3px}
-.tile-run{color:var(--ok); font-size:11.5px; margin-top:3px}
+.tile-warn{color:var(--live); font-size:12px; margin-top:3px}
+.tile-run{color:var(--ok); font-size:12px; margin-top:3px}
 .badge.run{color:var(--ok); border-color:#1F4D3A}
 
 /* ---------- version matrix ---------- */
@@ -254,7 +272,7 @@ table.mx tbody tr:hover td{background:var(--raised)}
 .badge.pushed{color:var(--ok); border-color:#1F4D3A}
 .badge.promo{color:var(--promo); border-color:#4A3560}
 .badge.import{color:var(--muted); border-color:var(--line); font-style:italic}
-.newest{font-size:11px; color:var(--dim)}
+.newest{font-size:12px; color:var(--dim)}
 .branch{
   font-family:var(--mono); font-size:11px; color:var(--muted);
   border:1px solid var(--line); border-radius:4px; padding:1px 6px;
@@ -270,7 +288,7 @@ table.mx tbody tr:hover td{background:var(--raised)}
 }
 .changes > div{padding:2px 0}
 .changes code{font-family:var(--mono); font-size:12px; color:var(--accent); margin-right:6px}
-.changes .row-when{margin-left:6px; font-size:11.5px}
+.changes .row-when{margin-left:6px; font-size:12px}
 
 /* ---------- build history ---------- */
 .builds{border:1px solid var(--line); border-radius:8px; overflow:hidden}
@@ -321,6 +339,7 @@ pre.log{
   width:100%; max-width:660px; padding:22px 24px 24px;
 }
 .modal.wide{max-width:820px}
+.modal:focus{outline:none}
 .modal h2{font-size:17px; margin:0 0 3px; font-weight:600}
 .modal .sub{color:var(--muted); font-size:13px; margin:0 0 18px}
 label.f{display:block; margin-bottom:14px}
@@ -371,7 +390,7 @@ table.ptable th{
 table.ptable th code{font-family:var(--mono); font-size:12.5px; color:var(--text)}
 table.ptable td{padding:4px 0}
 .req{color:var(--bad); margin-left:3px}
-.pabout{font-size:11.5px; color:var(--dim); white-space:normal; max-width:180px; font-weight:400}
+.pabout{font-size:12px; color:var(--dim); white-space:normal; max-width:180px; font-weight:400}
 
 /* ---------- parameter definitions in the settings dialogs ---------- */
 table.pdef{border-collapse:collapse; width:100%; font-size:12.5px; margin-bottom:16px}
@@ -415,7 +434,7 @@ fieldset > legend{font-size:12.5px; color:var(--muted); padding:0; margin-bottom
 .hit input{flex:0 0 auto; margin:0}
 .hit-name{flex:0 0 auto; font-family:var(--mono); font-size:13.5px; font-weight:500}
 .hit-path{
-  flex:1; min-width:0; font-family:var(--mono); font-size:11.5px; color:var(--dim);
+  flex:1; min-width:0; font-family:var(--mono); font-size:12px; color:var(--dim);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; direction:rtl; text-align:left;
 }
 .hit .badge{flex:0 0 auto}
@@ -1046,7 +1065,7 @@ function renderOverview(){
   $('#pane').innerHTML = `
     <div class="pane-head">
       <div><h1>Tổng quan</h1>
-        <div class="ref">Bản nào đang nằm ở môi trường nào</div></div>
+        <div class="lede">Bản nào đang nằm ở môi trường nào</div></div>
       <div class="actions"><button class="btn" id="doVersions">Lịch sử cài đặt</button></div>
     </div>
     <div class="section-label">Dự án <span class="count">${projects().length}</span></div>
@@ -1103,10 +1122,18 @@ function renderProject(p){
       <div class="actions">
         ${srcId || p.releaseMode !== 'promote'
           ? `<button class="btn primary" id="doBuild">Build</button>` : ''}
-        <button class="btn" id="doRegistry" title="Đọc các tag đang có trên registry — kể cả bản do CI hoặc máy khác đẩy lên">Đọc từ registry</button>
-        <button class="btn" id="doCleanup" title="Xoá image cũ của dự án trên máy này, giữ vài bản mới nhất mỗi môi trường">Dọn image cũ</button>
         <button class="btn" id="doSettings">Cài đặt dự án</button>
-        <button class="btn" id="doVersions">Lịch sử cài đặt</button>
+        <div class="menuwrap">
+          <button class="btn" id="moreBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu">Thêm ▾</button>
+          <div class="menu" id="moreMenu" role="menu" hidden>
+            <button role="menuitem" id="doRegistry">Đọc từ registry
+              <span>tag đang có trên registry, kể cả bản do CI hay máy khác đẩy lên</span></button>
+            <button role="menuitem" id="doCleanup">Dọn image cũ
+              <span>xoá image cũ trên máy này, giữ vài bản mới nhất mỗi môi trường</span></button>
+            <button role="menuitem" id="doVersions">Lịch sử cài đặt
+              <span>xem và khôi phục các bản lưu của config.json</span></button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="section-label">Môi trường <span class="count">${envs.length}</span></div>
@@ -1131,11 +1158,42 @@ function renderProject(p){
     buildDialog(p, target);
   };
   $('#doSettings').onclick = () => projectDialog(p);
+  mountMenu($('#moreBtn'), $('#moreMenu'));
   $('#doRegistry').onclick = () => registryDialog(p);
   $('#doCleanup').onclick = () => cleanupDialog(p);
   $('#doVersions').onclick = versionsDialog;
   $$('[data-goenv]').forEach(el => el.onclick = () => { state.sel = {kind:'env', id:el.dataset.goenv}; render(); });
   wireCellButtons(p);
+}
+
+/* ---------- a small dropdown menu ----------
+   Five buttons in a row wrapped under the title as soon as a warning took
+   the space, and gave Build no more weight than "Lịch sử cài đặt". The
+   occasional actions live behind "Thêm" instead. Keyboard: Enter/Space open,
+   arrows move, Escape closes and hands focus back to the button. */
+function mountMenu(btn, menu){
+  const items = () => $$('[role=menuitem]', menu);
+  const open = () => {
+    menu.hidden = false; btn.setAttribute('aria-expanded', 'true');
+    items()[0]?.focus();
+    setTimeout(() => document.addEventListener('click', outside), 0);
+  };
+  const close = (refocus) => {
+    menu.hidden = true; btn.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('click', outside);
+    if (refocus) btn.focus();
+  };
+  const outside = e => { if (!menu.contains(e.target) && e.target !== btn) close(false); };
+  btn.onclick = () => menu.hidden ? open() : close(true);
+  menu.onkeydown = e => {
+    const list = items(), i = list.indexOf(document.activeElement);
+    if (e.key === 'Escape'){ e.stopPropagation(); close(true); }
+    else if (e.key === 'ArrowDown'){ e.preventDefault(); list[(i + 1) % list.length].focus(); }
+    else if (e.key === 'ArrowUp'){ e.preventDefault(); list[(i - 1 + list.length) % list.length].focus(); }
+    else if (e.key === 'Tab') close(false);
+  };
+  // Picking an item closes the menu before its own handler opens a dialog.
+  items().forEach(it => it.addEventListener('click', () => close(false)));
 }
 
 /* ---------- cleaning up old local images ----------
@@ -1587,16 +1645,57 @@ async function loadLog(id, offset=0){
 }
 
 /* ---------- modal plumbing ---------- */
-function closeModal(){ $('#modalHost').innerHTML = ''; document.removeEventListener('keydown', onEsc); }
-function onEsc(e){ if (e.key === 'Escape') closeModal(); }
+// The element that had focus before a dialog opened, so closing it puts the
+// keyboard back where the person was instead of at the top of the page.
+let modalOpener = null;
+
+function closeModal(){
+  $('#modalHost').innerHTML = '';
+  document.removeEventListener('keydown', onEsc);
+  let back = modalOpener;
+  modalOpener = null;
+  // Opened from a menu item: the menu is shut by now, so go back to the
+  // button that opens it.
+  if (back && back.closest('.menu')) back = back.closest('.menuwrap').querySelector('[aria-haspopup]');
+  // A refresh while the dialog was open may have redrawn the page; then the
+  // old button is gone and there is nothing sensible to return to.
+  if (back && document.contains(back)) back.focus();
+}
+
+const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+
+// onEsc closes the dialog, and keeps Tab inside it: without the wrap, Tab
+// walked out of the dialog into the page behind the veil, where nothing
+// visible had focus.
+function onEsc(e){
+  if (e.key === 'Escape') return closeModal();
+  if (e.key !== 'Tab') return;
+  const m = $('.modal');
+  if (!m) return;
+  const list = $$(FOCUSABLE, m).filter(el => el.offsetParent !== null);
+  if (!list.length) return;
+  const first = list[0], last = list[list.length - 1];
+  if (e.shiftKey && (document.activeElement === first || !m.contains(document.activeElement))){
+    e.preventDefault(); last.focus();
+  } else if (!e.shiftKey && (document.activeElement === last || !m.contains(document.activeElement))){
+    e.preventDefault(); first.focus();
+  }
+}
 function openModal(html, wide=false){
-  $('#modalHost').innerHTML = `<div class="veil"><div class="modal${wide?' wide':''}" role="dialog" aria-modal="true">${html}</div></div>`;
+  // A dialog opened from inside another (Promote from the Build dialog)
+  // keeps the first opener: that is where focus belongs once both are gone.
+  if (!$('.veil')) modalOpener = document.activeElement;
+  $('#modalHost').innerHTML = `<div class="veil"><div class="modal${wide?' wide':''}" role="dialog" aria-modal="true" tabindex="-1">${html}</div></div>`;
+  document.removeEventListener('keydown', onEsc);
   document.addEventListener('keydown', onEsc);
   $('.veil').onclick = e => { if (e.target === $('.veil')) closeModal(); };
   const m = $('.modal');
   // A screen reader announces the dialog by its heading.
   const h = $('h2', m);
   if (h){ h.id = 'modal-title'; m.setAttribute('aria-labelledby', 'modal-title'); }
+  // Focus moves into the dialog at once. Dialogs that know better — the
+  // Build dialog focuses its version box — move it again right after.
+  m.focus();
   return m;
 }
 
@@ -2788,7 +2887,9 @@ $('#addProject').onclick = async () => {
 refresh().catch(e => { markPollFail(); toast(e.message, true); });
 // A failed poll is counted, not swallowed: see showOffline above for why the
 // screen must say so rather than keep drawing the state it last knew.
-setInterval(() => { if (!$('.veil')) refresh().catch(() => markPollFail()); }, 5000);
+// Not while a dialog or a menu is open: redrawing the page would close the
+// menu under the pointer.
+setInterval(() => { if (!$('.veil') && !$('.menu:not([hidden])')) refresh().catch(() => markPollFail()); }, 5000);
 
 // Sợi dây báo cửa sổ này còn sống. Đóng cửa sổ là hệ điều hành cắt kết nối
 // ngay, và DIMA tắt theo để trả lại cổng — thứ mà cách cũ (canh tiến trình
